@@ -1,0 +1,37 @@
+name: Sitdown
+options:
+  bundleIdPrefix: edu.davidson
+  deploymentTarget:
+    iOS: "18.0"
+packages:
+  Sitdown:
+    path: ..
+targets:
+  Sitdown:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - Sources
+    dependencies:
+      - package: Sitdown
+        product: SitdownKit
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Sitdown
+        NSMicrophoneUsageDescription: >-
+          Sitdown records your 1-on-1 meetings so it can transcribe them.
+          All processing happens on this device; audio never leaves your phone.
+        UIBackgroundModes: [audio]
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: edu.davidson.sitdown
+        DEVELOPMENT_TEAM: 4Z539UE4TT
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "6.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+        CODE_SIGN_STYLE: Automatic

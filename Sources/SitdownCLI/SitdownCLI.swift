@@ -1,0 +1,97 @@
+import Foundation
+import SitdownKit
+import AudioCommon
+
+/// Development harness: process a recording from the command line.
+///
+///   sitdown-cli meeting.wav [--enroll Name=voice.wav ...] [--out dir] [--title "Weekly 1:1"]
+@main
+struct SitdownCLI {
+    static func main() async {
+        do {
+            try await run()
+        } catch {
+            FileHandle.standardError.write(Data("error: \(error)\n".utf8))
+            exit(1)
+        }
+    }
+
+    static func run() async throws {
+        var args = Array(CommandLine.arguments.dropFirst())
+        guard !args.isEmpty, !["-h", "--help"].contains(args[0]) else {
+            print("""
+            usage: sitdown-cli <audio-file> [options]
+              --enroll Name=voice.wav   enroll a known voice (repeatable)
+              --out <dir>               write transcript.md + transcript.json here
+              --title <title>           meeting title (default: file name)
+            """)
+            return
+        }
+
+        let audioPath = args.removeFirst()
+        var enrollSpecs: [(String, String)] = []
+        var outDir: String?
+        var title: String?
+        var i = 0
+        while i < args.count {
+            switch args[i] {
+            case "--enroll":
+                let spec = args[i + 1]
+                guard let eq = spec.firstIndex(of: "=") else {
+                    throw ValidationError("--enroll expects Name=file.wav, got '\(spec)'")
+                }
+                enrollSpecs.append((String(spec[..<eq]), String(spec[spec.index(after: eq)...])))
+                i += 2
+            case "--out": outDir = args[i + 1]; i += 2
+            case "--title": title = args[i + 1]; i += 2
+            default: throw ValidationError("unknown option \(args[i])")
+            }
+        }
+
+        let sr = MeetingPipeline.sampleRate
+        print("Loading models (downloads on first run)...")
+        let pipeline = try await MeetingPipeline.load { p, stage in
+            print(String(format: "  [%3.0f%%] %@", p * 100, stage))
+        }
+
+        var enrollments: [VoiceEnrollment] = []
+        for (name, path) in enrollSpecs {
+            let voice = try AudioFileLoader.load(url: URL(fileURLWithPath: path), targetSampleRate: sr)
+            enrollments.append(VoiceEnrollment(name: name, embedding: pipeline.embedVoice(audio: voice)))
+            print("Enrolled \(name) from \(path)")
+        }
+
+        let url = URL(fileURLWithPath: audioPath)
+        let audio = try AudioFileLoader.load(url: url, targetSampleRate: sr)
+        print("Loaded \(audioPath): \(TranscriptExport.timestamp(Double(audio.count) / Double(sr)))")
+
+        let start = Date()
+        let transcript = try pipeline.process(
+            audio: audio,
+            title: title ?? url.deletingPathExtension().lastPathComponent,
+            date: Date(),
+            enrollments: enrollments
+        ) { p, stage in
+            print(String(format: "  [%3.0f%%] %@", p * 100, stage))
+        }
+        let elapsed = Date().timeIntervalSince(start)
+        let rtf = elapsed / max(transcript.duration, 0.001)
+        print(String(format: "Processed in %.1fs (%.2fx real-time)\n", elapsed, rtf))
+
+        let markdown = TranscriptExport.markdown(transcript)
+        print(markdown)
+
+        if let outDir {
+            let dir = URL(fileURLWithPath: outDir)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try markdown.write(to: dir.appendingPathComponent("transcript.md"), atomically: true, encoding: .utf8)
+            try TranscriptExport.json(transcript).write(to: dir.appendingPathComponent("transcript.json"))
+            print("Wrote \(outDir)/transcript.md and transcript.json")
+        }
+    }
+
+    struct ValidationError: Error, CustomStringConvertible {
+        let description: String
+        init(_ d: String) { description = d }
+    }
+}

@@ -1,0 +1,66 @@
+# Build, sign, notarize, and publish the listener installer on tag push.
+# Modeled on Oncillascope's release workflow.
+#
+# Tag to release:  git tag listener-v1.0.0 && git push origin listener-v1.0.0
+#
+# Required repo secrets:
+#   AC_APPLE_ID / AC_TEAM_ID / AC_APP_PASSWORD   notarization (already set)
+#   DEVELOPER_ID_P12 / DEVELOPER_ID_P12_PASSWORD base64 P12 holding BOTH the
+#     "Developer ID Application" and "Developer ID Installer" identities
+#     (Keychain Access → select both → Export 2 items…).
+name: release-listener
+
+on:
+  push:
+    tags: ["listener-v*"]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import signing identities
+        env:
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/build.keychain"
+          KPW="$(uuidgen)"
+          security create-keychain -p "$KPW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KPW" "$KEYCHAIN"
+          echo "$DEVELOPER_ID_P12" | base64 -d > "$RUNNER_TEMP/certs.p12"
+          security import "$RUNNER_TEMP/certs.p12" -k "$KEYCHAIN" \
+            -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productbuild
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productbuild: \
+            -s -k "$KPW" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          rm -f "$RUNNER_TEMP/certs.p12"
+
+      - name: Store notarization credentials
+        env:
+          AC_APPLE_ID: ${{ secrets.AC_APPLE_ID }}
+          AC_TEAM_ID: ${{ secrets.AC_TEAM_ID }}
+          AC_APP_PASSWORD: ${{ secrets.AC_APP_PASSWORD }}
+        run: |
+          xcrun notarytool store-credentials luxicon \
+            --apple-id "$AC_APPLE_ID" --team-id "$AC_TEAM_ID" --password "$AC_APP_PASSWORD"
+
+      - name: Build, sign, notarize installer
+        env:
+          LUXICON_SIGN_IDENTITY: "Developer ID Application: The Trustees of Davidson College (4Z539UE4TT)"
+          LUXICON_INSTALLER_IDENTITY: "Developer ID Installer: The Trustees of Davidson College (4Z539UE4TT)"
+        run: |
+          # Strip the "listener-v" prefix for the pkg version.
+          export LUXICON_PKG_VERSION="${GITHUB_REF_NAME#listener-v}"
+          scripts/build-installer.sh
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/LuxiconListener-*.pkg \
+            --title "Mac Sync Listener ${GITHUB_REF_NAME#listener-}" \
+            --notes "Double-click installer for the Luxicon Mac sync listener. Install, then pair: \`cat ~/Luxicon/.sync-token\` → Luxicon → My Voice → Mac sync. Apple Silicon required."

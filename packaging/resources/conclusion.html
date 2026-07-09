@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><style>
+body { font: 13px -apple-system, sans-serif; color: #333; margin: 16px; }
+code { font: 12px ui-monospace, monospace; background: #f2f2f7; padding: 1px 5px; border-radius: 4px; }
+h2 { font-size: 15px; }
+</style></head>
+<body>
+<h2>The listener is running.</h2>
+<p>It starts automatically every time you log in, and receives 1-on-1
+transcripts your iPhone pushes over your local network.</p>
+<p><b>Pair your iPhone (one time):</b></p>
+<ol>
+  <li>Open <b>Terminal</b> and run: <code>cat ~/Luxicon/.sync-token</code></li>
+  <li>In Luxicon on your iPhone: <b>My Voice &rarr; Mac sync</b>, enter that token.</li>
+  <li>Optionally turn on <b>Push automatically after each 1-on-1</b>.</li>
+</ol>
+<p>Transcripts land in the <code>Luxicon</code> folder in your home folder.
+To remove the listener later, run
+<code>luxicon-listener-uninstall</code> in Terminal.</p>
+</body>
+</html>

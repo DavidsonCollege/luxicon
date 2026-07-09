@@ -57,6 +57,12 @@ Review fixes on the above:
   sessions when two 1-on-1s share a day, WAV headers clamp instead of
   crashing past 4 GB, and the install script pre-authorizes sudo, prefers
   a Developer ID identity, and creates the LaunchAgent on first run.
+- Mac listener installer: `scripts/build-installer.sh` produces a
+  double-clickable pkg (binary → /usr/local/bin, all-users LaunchAgent,
+  firewall Allow and immediate start in the postinstall, uninstaller
+  included), signed/notarized/stapled when the Developer ID Installer
+  identity is present; a `listener-v*` tag builds and publishes it to
+  GitHub Releases via CI.
 
 ## 1.0 (builds 1–5)
 

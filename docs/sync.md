@@ -15,11 +15,25 @@ without AirDrop round-trips.
 - Pushes are one file per connection; re-pushing a session after its summary
   lands simply overwrites the same file (idempotent).
 
+## Install on your Mac (managers — no Terminal required to install)
+
+Download `LuxiconListener-<version>.pkg` from the repo's
+[Releases page](https://github.com/DavidsonCollege/luxicon/releases),
+double-click it, and enter your Mac password when asked — that one prompt
+covers everything (the network permission and the login item). The listener
+starts immediately and at every login. Apple Silicon Macs only.
+
+The installer puts the binary at `/usr/local/bin/luxicon-mcp` and the login
+item at `/Library/LaunchAgents` (all users); it also migrates and replaces a
+developer-style `~/bin` install if one exists. To remove it later, run
+`luxicon-listener-uninstall` in Terminal. Developers building from a checkout
+can use `scripts/install-listener.sh` instead (next section), or build the
+pkg themselves with `scripts/build-installer.sh`.
+
 ## Pairing
 
-1. On the Mac: `scripts/install-listener.sh` (builds, signs, installs, and
-   starts the listener — see the next section), then read the token with
-   `cat ~/Luxicon/.sync-token`.
+1. On the Mac: install the listener (pkg above, or the script below), then
+   read the token: open Terminal and run `cat ~/Luxicon/.sync-token`.
 2. On the iPhone: **My Voice → Mac sync**, enter the token.
 3. Optional: toggle **Push automatically after each 1-on-1**, or use
    **Push All to Mac** from a person's share menu.

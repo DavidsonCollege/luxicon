@@ -1,0 +1,33 @@
+#!/bin/bash
+# LuxiconListener.pkg postinstall — runs as root inside Installer.app, which
+# is what makes the whole install one admin prompt: the firewall Allow and
+# LaunchAgent bootstrap below need root and get it here.
+set -u
+
+BIN=/usr/local/bin/luxicon-mcp
+LABEL=edu.davidson.luxicon.listener
+PLIST="/Library/LaunchAgents/$LABEL.plist"
+FW=/usr/libexec/ApplicationFirewall/socketfilterfw
+
+# Firewall Allow, keyed to the binary's code signature. Idempotent.
+"$FW" --add "$BIN" >/dev/null 2>&1 || true
+"$FW" --unblockapp "$BIN" >/dev/null 2>&1 || true
+
+# Start the listener for whoever is at the console right now; everyone else
+# gets RunAtLoad at their next login. (At the loginwindow, uid is 0 — skip.)
+uid=$(stat -f %u /dev/console 2>/dev/null || echo 0)
+user=$(stat -f %Su /dev/console 2>/dev/null || echo root)
+if [ "$uid" -gt 0 ]; then
+    # Migrate the developer-style per-user install (scripts/install-listener.sh):
+    # its plist shares our label and would collide with the system agent.
+    home=$(dscl . -read "/Users/$user" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+    if [ -n "$home" ] && [ -f "$home/Library/LaunchAgents/$LABEL.plist" ]; then
+        launchctl bootout "gui/$uid/$LABEL" >/dev/null 2>&1 || true
+        rm -f "$home/Library/LaunchAgents/$LABEL.plist"
+    fi
+    # Idempotent (re)start on the freshly installed binary.
+    launchctl bootout "gui/$uid/$LABEL" >/dev/null 2>&1 || true
+    launchctl bootstrap "gui/$uid" "$PLIST" >/dev/null 2>&1 || true
+fi
+
+exit 0

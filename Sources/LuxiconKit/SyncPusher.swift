@@ -5,6 +5,7 @@ public enum SyncPushError: Error, LocalizedError {
     case noListenerFound
     case connectionFailed(String)
     case noAcknowledgement
+    case localNetworkDenied(String)
 
     public var errorDescription: String? {
         switch self {
@@ -14,6 +15,8 @@ public enum SyncPushError: Error, LocalizedError {
             return "Connection failed: \(reason) (check the pairing token)."
         case .noAcknowledgement:
             return "The listener did not confirm the transfer."
+        case .localNetworkDenied(let reason):
+            return "Local network access was blocked (\(reason)). Check Settings → Privacy & Security → Local Network → Luxicon."
         }
     }
 }
@@ -49,7 +52,7 @@ extension LuxiconSync {
 
     // MARK: - Internals
 
-    private static func withTimeout<T: Sendable>(
+    static func withTimeout<T: Sendable>(
         _ seconds: TimeInterval,
         onTimeout: Error,
         _ work: @Sendable @escaping () async throws -> T
@@ -70,29 +73,59 @@ extension LuxiconSync {
         let browser = NWBrowser(
             for: .bonjour(type: serviceType, domain: nil),
             using: NWParameters())
-        defer { browser.cancel() }
-        return try await withCheckedThrowingContinuation { continuation in
-            let once = Once()
-            browser.browseResultsChangedHandler = { results, _ in
-                if let first = results.first {
-                    once.run { continuation.resume(returning: first.endpoint) }
+        let once = Once()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                browser.browseResultsChangedHandler = { results, _ in
+                    if let first = results.first {
+                        once.run {
+                            browser.cancel()
+                            continuation.resume(returning: first.endpoint)
+                        }
+                    }
                 }
-            }
-            browser.stateUpdateHandler = { state in
-                if case .failed(let error) = state {
-                    once.run { continuation.resume(
-                        throwing: SyncPushError.connectionFailed("\(error)")) }
+                browser.stateUpdateHandler = { state in
+                    switch state {
+                    case .failed(let error):
+                        once.run {
+                            browser.cancel()
+                            continuation.resume(
+                                throwing: SyncPushError.connectionFailed("\(error)"))
+                        }
+                    case .waiting(let error):
+                        // Policy denial (Local Network permission off) parks the
+                        // browser here forever — fail fast with the real reason.
+                        once.run {
+                            browser.cancel()
+                            continuation.resume(
+                                throwing: SyncPushError.localNetworkDenied("\(error)"))
+                        }
+                    case .cancelled:
+                        once.run { continuation.resume(throwing: CancellationError()) }
+                    default:
+                        break
+                    }
                 }
+                browser.start(queue: .global(qos: .userInitiated))
             }
-            browser.start(queue: .global(qos: .userInitiated))
+        } onCancel: {
+            // Drives the browser to .cancelled, which resumes the continuation
+            // — this is what lets withTimeout's task group actually exit.
+            browser.cancel()
         }
     }
 
     private static func send(_ push: Push, to endpoint: NWEndpoint, token: String) async throws {
         let data = try JSONEncoder().encode(push)
         let connection = NWConnection(to: endpoint, using: parameters(token: token))
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            PushSender(connection: connection, data: data, continuation: continuation).start()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                PushSender(connection: connection, data: data, continuation: continuation).start()
+            }
+        } onCancel: {
+            // Drives the connection to .cancelled → PushSender resumes the
+            // continuation; without this a dead Mac hangs the push forever.
+            connection.cancel()
         }
     }
 }
@@ -117,6 +150,10 @@ private final class PushSender: @unchecked Sendable {
             switch state {
             case .ready:
                 sendPayload()
+            case .waiting(let error):
+                // .waiting retries indefinitely (host offline, port closed);
+                // for a LAN push, failing fast beats hanging until timeout.
+                fail("\(error)")
             case .failed(let error):
                 fail("\(error)")
             case .cancelled:

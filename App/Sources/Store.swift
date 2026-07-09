@@ -71,6 +71,8 @@ final class Store {
     /// Transient sync status for the UI; not persisted.
     var vocabularySyncError: String?
     @ObservationIgnored var vocabularyLastSyncAttempt: Date?
+    /// Rate limit for the foreground failed-push retry sweep.
+    @ObservationIgnored var lastPushRetrySweep: Date?
     /// Set when the persisted library could not be read at launch (the file
     /// is quarantined, never overwritten). Shown once by the root view.
     var startupWarning: String?

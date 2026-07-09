@@ -79,6 +79,22 @@ extension Store {
         Task { await pushToMac(session) }
     }
 
+    /// Foreground trigger: retry sessions whose last push failed. Only
+    /// attempted-and-failed sessions retry — never-pushed ones don't, so
+    /// enabling sync can't surprise-upload the whole history ("Push All to
+    /// Mac" is the deliberate backfill). Rate-limited like vocabulary sync.
+    func retryFailedPushesIfEnabled() {
+        guard autoPushToMac, !syncToken.isEmpty else { return }
+        if let last = lastPushRetrySweep,
+           Date().timeIntervalSince(last) < 60 { return }
+        let failed = sessions.filter { $0.status == .ready && $0.lastPushError != nil }
+        guard !failed.isEmpty else { return }
+        lastPushRetrySweep = Date()
+        Task {
+            for session in failed { await pushToMac(session) }
+        }
+    }
+
     /// Push every ready session for one person; returns (succeeded, total).
     func pushAll(for person: Person) async -> (succeeded: Int, total: Int) {
         let ready = sessions(for: person).filter { $0.status == .ready }

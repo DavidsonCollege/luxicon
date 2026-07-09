@@ -28,6 +28,14 @@ New in this build:
   field in My Voice) gives the summarizer background it can use.
 - People import/export and URL sync, modeled on vocabulary sync but
   merge-only: syncing adds and updates people, never removes anyone.
+- Mac sync status on every session (shown only when Mac Sync is paired):
+  rows get a small synced/failed/pending mark, and session detail gets a
+  Mac Sync section with the exact error message and a retry button. Failed
+  pushes retry automatically when the app foregrounds.
+- `scripts/install-listener.sh` builds, signs, installs, and firewall-allows
+  the Mac listener; the stable signature keeps the firewall Allow across
+  rebuilds (unsigned builds were silently re-blocked, timing out every
+  push). The listener log now flushes live under launchd.
 
 ## 1.0 (builds 1–5)
 

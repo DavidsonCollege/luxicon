@@ -6,5 +6,10 @@
          ~700 MB of speech models plus long recordings held in memory. -->
     <key>com.apple.developer.kernel.increased-memory-limit</key>
     <true/>
+    <!-- Background GPU Access: lets a BGContinuedProcessingTask keep running
+         MLX inference after the app is backgrounded (iOS 26+, supported
+         devices only — gated at runtime via BGTaskScheduler.supportedResources). -->
+    <key>com.apple.developer.background-tasks.continued-processing.gpu</key>
+    <true/>
 </dict>
 </plist>

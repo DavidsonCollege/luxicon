@@ -25,6 +25,11 @@ targets:
           Luxicon records your 1-on-1 meetings so it can transcribe them.
           All processing happens on this device; audio never leaves your phone.
         UIBackgroundModes: [audio]
+        # Continuous background tasks (iOS 26+) require a wildcard identifier:
+        # bundle ID + semantic context + ".*"; each submission appends a
+        # unique suffix (see ContinuedProcessing.swift).
+        BGTaskSchedulerPermittedIdentifiers:
+          - edu.davidson.luxicon.processing.*
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UISupportedInterfaceOrientations~ipad:

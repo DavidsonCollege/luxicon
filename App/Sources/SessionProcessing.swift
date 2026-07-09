@@ -56,6 +56,10 @@ extension Store {
                 ) { fraction, stage in
                     Task { @MainActor in
                         self.processing.bySession[sessionId] = .init(fraction: fraction, stage: stage)
+                        if #available(iOS 26.0, *) {
+                            ContinuedProcessing.shared.report(
+                                sessionId: sessionId, fraction: fraction, stage: stage)
+                        }
                     }
                 }
                 if let personName {
@@ -72,18 +76,42 @@ extension Store {
             }
             processing.bySession[sessionId] = nil
             processing.tasks[sessionId] = nil
+            if #available(iOS 26.0, *) {
+                ContinuedProcessing.shared.end(sessionId: sessionId, success: s.status == .ready)
+            }
             update(s)
             refreshKeepAwake()
         }
         processing.tasks[sessionId] = task
+
+        // On devices with background GPU (iOS 26+), a continuous background
+        // task lets this work survive backgrounding; on expiration, reuse the
+        // backgrounding cancellation path so the session returns to .recorded
+        // and auto-resumes on next foreground.
+        if #available(iOS 26.0, *) {
+            let title = personName.map { "Transcribing 1-on-1 with \($0)" } ?? "Transcribing 1-on-1"
+            ContinuedProcessing.shared.begin(sessionId: sessionId, title: title) { [weak self] in
+                guard let self else { return }
+                self.processing.interrupted.insert(sessionId)
+                self.processing.tasks[sessionId]?.cancel()
+            }
+        }
     }
 
     /// iOS kills processes that touch the GPU while backgrounded (MLX
     /// diarization does). Cancel gracefully and pick the work back up when the
-    /// app returns to the foreground.
+    /// app returns to the foreground — unless a continuous background task
+    /// with GPU access covers the session (iOS 26+, supported devices).
     func handleScenePhaseChange(toBackground: Bool) {
         if toBackground {
             for (id, task) in processing.tasks {
+                // Sessions holding a GPU-granted continuous background task
+                // (iOS 26+) keep running; the system supervises them via a
+                // Live Activity and expires them if needed.
+                if #available(iOS 26.0, *),
+                   ContinuedProcessing.shared.backgroundCapable.contains(id) {
+                    continue
+                }
                 processing.interrupted.insert(id)
                 task.cancel()
             }

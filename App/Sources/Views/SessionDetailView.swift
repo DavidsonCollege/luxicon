@@ -72,10 +72,12 @@ struct TranscriptView: View {
     @State private var renameText = ""
     @State private var exportURL: URL?
     @State private var summaryURL: URL?
+    @State private var isPushing = false
 
     var body: some View {
         List {
             summarySection
+            macSyncSection
             Section("Talk time") {
                 ForEach(transcript.speakers, id: \.speakerId) { s in
                     HStack {
@@ -196,6 +198,62 @@ struct TranscriptView: View {
                 }
             }
         }
+    }
+
+    /// Push status + diagnostics; rendered only while Mac Sync is enabled.
+    /// TranscriptView re-inits with the updated record after each push, so
+    /// the section always reflects the last recorded outcome.
+    @ViewBuilder
+    private var macSyncSection: some View {
+        if !store.syncToken.isEmpty {
+            Section("Mac Sync") {
+                switch session.macSyncState {
+                case .synced(let date):
+                    Label {
+                        Text("Pushed to Mac \(date.formatted(.relative(presentation: .named)))")
+                    } icon: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                case .failed(let message):
+                    Label {
+                        Text(message).foregroundStyle(.red)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                    pushButton("Retry Push")
+                case .pending:
+                    Label {
+                        Text("Not pushed yet").foregroundStyle(.secondary)
+                    } icon: {
+                        Image(systemName: "laptopcomputer")
+                            .foregroundStyle(.secondary)
+                    }
+                    pushButton("Push to Mac")
+                }
+            }
+        }
+    }
+
+    private func pushButton(_ title: String) -> some View {
+        Button {
+            isPushing = true
+            Task {
+                await store.pushToMac(session)
+                isPushing = false
+            }
+        } label: {
+            if isPushing {
+                HStack {
+                    ProgressView()
+                    Text("Pushing…").padding(.leading, 8)
+                }
+            } else {
+                Label(title, systemImage: "laptopcomputer.and.arrow.down")
+            }
+        }
+        .disabled(isPushing)
     }
 
     /// ShareLink needs a file URL; write the markdown next to the temp dir.

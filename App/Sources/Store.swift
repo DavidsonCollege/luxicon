@@ -75,6 +75,14 @@ final class Store {
     /// Transient sync status for the UI; not persisted.
     var vocabularySyncError: String?
     @ObservationIgnored var vocabularyLastSyncAttempt: Date?
+    /// Remote people roster kept in sync; unlike vocabulary, each sync
+    /// merges (adds/updates by name) and never removes anyone.
+    var peopleSourceURL: String = ""
+    var peopleHeaders: [HTTPHeader] = []
+    var peopleLastSync: Date?
+    /// Transient sync status for the UI; not persisted.
+    var peopleSyncError: String?
+    @ObservationIgnored var peopleLastSyncAttempt: Date?
     /// Rate limit for the foreground failed-push retry sweep.
     @ObservationIgnored var lastPushRetrySweep: Date?
     /// Set when the persisted library could not be read at launch (the file
@@ -107,6 +115,8 @@ final class Store {
         var syncToken: String?
         var syncHost: String?
         var autoPushToMac: Bool?
+        var peopleSourceURL: String?
+        var peopleLastSync: Date?
     }
 
     static let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -116,6 +126,7 @@ final class Store {
 
     private static let keychainSyncToken = "syncToken"
     private static let keychainVocabHeaders = "vocabularyHeaders"
+    private static let keychainPeopleHeaders = "peopleHeaders"
 
     /// Read the people list without constructing a Store (no recovery side
     /// effects) — used by App Intents entity queries.
@@ -149,6 +160,8 @@ final class Store {
         syncToken = KeychainStore.string(for: Self.keychainSyncToken) ?? ""
         vocabularyHeaders = KeychainStore.data(for: Self.keychainVocabHeaders)
             .flatMap { try? JSONDecoder().decode([HTTPHeader].self, from: $0) } ?? []
+        peopleHeaders = KeychainStore.data(for: Self.keychainPeopleHeaders)
+            .flatMap { try? JSONDecoder().decode([HTTPHeader].self, from: $0) } ?? []
 
         guard FileManager.default.fileExists(atPath: Self.storeURL.path) else { return }
         let persisted: Persisted
@@ -179,6 +192,8 @@ final class Store {
         autoSummarize = persisted.autoSummarize ?? true
         syncHost = persisted.syncHost ?? ""
         autoPushToMac = persisted.autoPushToMac ?? false
+        peopleSourceURL = persisted.peopleSourceURL ?? ""
+        peopleLastSync = persisted.peopleLastSync
 
         // One-way migration: secrets that older builds kept in store.json.
         if let legacyToken = persisted.syncToken, !legacyToken.isEmpty {
@@ -196,6 +211,9 @@ final class Store {
         KeychainStore.set(
             vocabularyHeaders.isEmpty ? nil : try? JSONEncoder().encode(vocabularyHeaders),
             for: Self.keychainVocabHeaders)
+        KeychainStore.set(
+            peopleHeaders.isEmpty ? nil : try? JSONEncoder().encode(peopleHeaders),
+            for: Self.keychainPeopleHeaders)
 
         let persisted = Persisted(
             people: people, sessions: sessions,
@@ -210,7 +228,9 @@ final class Store {
             autoSummarize: autoSummarize,
             syncToken: nil,          // Keychain-only since build 6
             syncHost: syncHost.isEmpty ? nil : syncHost,
-            autoPushToMac: autoPushToMac
+            autoPushToMac: autoPushToMac,
+            peopleSourceURL: peopleSourceURL.isEmpty ? nil : peopleSourceURL,
+            peopleLastSync: peopleLastSync
         )
         do {
             let data = try JSONEncoder().encode(persisted)

@@ -19,6 +19,7 @@ struct LuxiconApp: App {
             case .active:
                 store.handleScenePhaseChange(toBackground: false)
                 store.syncVocabularyIfConfigured()
+                store.syncPeopleIfConfigured()
                 store.retryFailedPushesIfEnabled()
             default:
                 break

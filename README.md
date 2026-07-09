@@ -1,5 +1,7 @@
 # Luxicon
 
+<img src="App/Assets.xcassets/AppIcon.appiconset/AppIcon.png" width="128" align="right" alt="Luxicon app icon: a stylized waveform">
+
 **On-device 1-on-1 recorder for managers.** Record a sit-down with a direct
 report on your iPhone, get a speaker-labeled transcript that stays on your
 devices, and export it as clean markdown or JSON for the AI assistant of your
@@ -31,10 +33,11 @@ Models download from Hugging Face on first use and are cached on-device:
 summaries, plus a small live-caption model (~1.2 GB total if you use
 everything).
 
-Measured on an M-series Mac (release build): a 50-second two-speaker meeting
-diarizes, transcribes, and speaker-matches in 4.6 s (0.09× real-time), with
-every turn correctly attributed. iPhones with recent A-series chips should
-land within a few multiples of that.
+Measured June 2026 on an M-series Mac (release build): a 50-second
+two-speaker meeting diarizes, transcribes, and speaker-matches in 4.6 s
+(0.09× real-time), with every turn correctly attributed. iPhones with recent
+A-series chips should land within a few multiples of that. Reproduce with
+`luxicon-cli <any two-speaker wav>` — it prints the real-time factor.
 
 ## Structure
 
@@ -152,5 +155,7 @@ asks first.
 ## License
 
 MIT. Depends on [speech-swift](https://github.com/soniqo/speech-swift)
-(Apache 2.0); model weights carry their own licenses (Pyannote segmentation:
-MIT; WeSpeaker: Apache 2.0; Parakeet: CC-BY-4.0).
+(Apache 2.0) and the
+[MCP Swift SDK](https://github.com/modelcontextprotocol/swift-sdk) (MIT);
+model weights carry their own licenses (Pyannote segmentation: MIT;
+WeSpeaker: Apache 2.0; Parakeet: CC-BY-4.0).

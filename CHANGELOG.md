@@ -37,6 +37,27 @@ New in this build:
   rebuilds (unsigned builds were silently re-blocked, timing out every
   push). The listener log now flushes live under launchd.
 
+Review fixes on the above:
+
+- Push reliability: pushes re-read the session at send time (a retry sweep
+  could push minutes-stale content and mark it fresh), one session can't
+  push twice concurrently, and a push outcome recorded mid-transcription is
+  no longer reverted when transcription finishes. Re-transcribing, renaming
+  a speaker, or regenerating a summary resets the sync badge to pending.
+- Summarizer context from people sync is length-capped and fenced as
+  untrusted in the prompt; sync requests refuse redirects to other hosts so
+  auth headers can't leak; a synced entry matching your own name updates
+  My Voice context instead of duplicating you; context edits persist on
+  backgrounding.
+- Privacy polish: copied transcripts are local-only and expire after 10
+  minutes; temp export files are deleted when views close; the Live
+  Activity redacts the person's name on the locked lock screen.
+- Robustness: sub-second recordings can't be saved, empty speaker renames
+  are ignored, audio decoding no longer blocks the UI, MCP returns both
+  sessions when two 1-on-1s share a day, WAV headers clamp instead of
+  crashing past 4 GB, and the install script pre-authorizes sudo, prefers
+  a Developer ID identity, and creates the LaunchAgent on first run.
+
 ## 1.0 (builds 1–5)
 
 Initial development: on-device diarized transcription, speaker enrollment,

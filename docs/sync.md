@@ -17,8 +17,10 @@ without AirDrop round-trips.
 
 ## Pairing
 
-1. On the Mac: `swift build -c release && .build/release/luxicon-mcp listen`
-2. On the iPhone: **My Voice → Mac sync**, enter the printed token.
+1. On the Mac: `scripts/install-listener.sh` (builds, signs, installs, and
+   starts the listener — see the next section), then read the token with
+   `cat ~/Luxicon/.sync-token`.
+2. On the iPhone: **My Voice → Mac sync**, enter the token.
 3. Optional: toggle **Push automatically after each 1-on-1**, or use
    **Push All to Mac** from a person's share menu.
 
@@ -37,7 +39,11 @@ scripts/install-listener.sh
 Signing matters: the firewall remembers "Allow" by code-signing identity,
 and unsigned builds get a new identity each rebuild — the firewall then
 silently blocks the listener and phone pushes fail with "The listener did
-not confirm the transfer".
+not confirm the transfer". If no signing certificate is in your keychain,
+the script signs ad-hoc and warns; that Allow holds only for builds
+installed through the script — a rebuild done outside it gets re-blocked.
+The script also creates and loads the LaunchAgent below if it isn't set up
+yet, so on a fresh Mac it is the only command you need.
 
 Save this as `~/Library/LaunchAgents/edu.davidson.luxicon.listener.plist`,
 replacing `YOURUSER` with your username:

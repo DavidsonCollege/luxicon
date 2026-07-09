@@ -84,21 +84,35 @@ Housekeeping:
 - The listener prints the pairing token at startup, so the log file is as
   sensitive as `.sync-token` — both are readable only by your account.
 
-## When the Mac isn't found
+## When a push fails
 
-Enterprise Wi-Fi often blocks mDNS/Bonjour. The listener prints its IP
-addresses at startup — enter one under **Mac address** on the phone and
-Luxicon connects directly to port 51234.
+Each session shows its sync state (small laptop mark on the row; open the
+session for the **Mac Sync** section with the exact error and a retry
+button). What each message means:
 
-Other checks:
+- **"No Mac listener found on this network"** — Bonjour discovery failed:
+  the listener isn't running, mDNS is blocked (enterprise Wi-Fi often does
+  this), or the devices are on different networks / an isolated guest SSID.
+  The listener prints the Mac's IP addresses at startup — enter one under
+  **Mac address** on the phone and Luxicon connects directly to port 51234.
+- **"Local network access was blocked"** — iOS **Local Network** permission
+  was declined on the first push; re-enable it in Settings → Privacy &
+  Security → Local Network → Luxicon.
+- **"Connection failed … (check the pairing token)"** — the Mac answered but
+  the TLS handshake or connection failed. Usually a wrong or stale token:
+  re-copy it from `~/Luxicon/.sync-token` on the Mac.
+- **"The listener did not confirm the transfer"** — the push timed out
+  mid-flight. Prime suspect: the macOS application firewall blocking the
+  listener (Bonjour still works because the *system* answers mDNS, so the
+  phone finds the Mac and then hangs connecting). Re-run
+  `scripts/install-listener.sh`, or check with
+  `/usr/libexec/ApplicationFirewall/socketfilterfw --listapps | grep -A1 luxicon`
+  — it must say "Allow incoming connections". Also possible: the Mac is
+  asleep, or the listener is wedged
+  (`tail ~/Library/Logs/luxicon-listener.log`).
 
-- iOS asks for **Local Network** permission on the first push; if you
-  declined, re-enable it in Settings → Privacy & Security → Local Network →
-  Luxicon.
-- Both devices must be on the same network (and not isolated by a guest
-  SSID).
-- A wrong token fails the TLS handshake — re-copy it from the listener
-  output.
+Failed pushes retry automatically the next time the app foregrounds (when
+automatic push is on), or manually via **Retry Push** on the session.
 
 ## Security notes
 

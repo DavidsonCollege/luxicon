@@ -106,7 +106,7 @@ struct MyVoiceView: View {
                 lastSync: store.peopleLastSync,
                 syncError: store.peopleSyncError,
                 idleFooter: "Point at a JSON people file (same format as Export People) and Luxicon will keep the roster synchronized whenever the app opens. Syncing adds and updates people (name and context) and never removes anyone.",
-                syncedFooter: "Syncing adds and updates people (name and context) and never removes anyone — remove people manually in the list. Headers are sent with every request (for example an Authorization token).",
+                syncedFooter: "Syncing adds and updates people (name and context) and never removes anyone — remove people manually in the list. For people in the synced file, its context wins on each sync — edit their context there, not here. Headers are sent with every request (for example an Authorization token).",
                 onSave: { store.save() },
                 onSync: { Task { await store.syncPeople() } }
             )

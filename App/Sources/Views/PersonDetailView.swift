@@ -54,7 +54,7 @@ struct PersonDetailView: View {
             } header: {
                 Text("Context")
             } footer: {
-                Text("Background the summarizer uses to interpret your 1-on-1s — e.g. “Senior sysadmin; runs the identity platform; discussing promotion this quarter.” Stays on this device.")
+                Text("Background the summarizer uses to interpret your 1-on-1s — e.g. “Senior sysadmin; runs the identity platform; discussing promotion this quarter.” Stays on this device unless you configure people sync — then the synced file's context wins.")
             }
 
             if sessions.isEmpty {

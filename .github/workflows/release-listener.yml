@@ -17,9 +17,26 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: |
+          # mlx-swift needs Swift tools 6.3+ (Xcode 26); the runner default can
+          # lag. Pick the newest installed Xcode rather than assuming a path.
+          sel="$(for app in /Applications/Xcode*.app; do
+                   [ -d "$app" ] || continue
+                   v="$("$app/Contents/Developer/usr/bin/xcodebuild" -version 2>/dev/null | awk 'NR==1{print $2}')"
+                   [ -n "$v" ] || continue
+                   printf '%s\t%s\n' "$v" "$app"
+                 done | sort -V | tail -1 | cut -f2)"
+          if [ -z "$sel" ]; then
+            echo "No Xcode found on this runner." >&2; exit 1
+          fi
+          echo "Selecting $sel"
+          sudo xcode-select -s "$sel"
+          swift --version
 
       - name: Import signing identities
         env:

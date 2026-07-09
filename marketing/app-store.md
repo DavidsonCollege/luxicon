@@ -92,3 +92,56 @@ https://github.com/DavidsonCollege/luxicon
 
 ## Copyright
 © 2026 Davidson College
+
+## TestFlight — Beta App Description (4000 chars max)
+
+Luxicon turns your 1-on-1 meetings into speaker-labeled transcripts, entirely
+on your iPhone. Put the phone on the table, record the conversation, and get
+a script-style transcript of who said what, when, and for how long — with
+talk-time stats for each person. Nothing is uploaded anywhere: transcription,
+speaker separation, and voice matching all run on the device, and the app
+works in airplane mode after a one-time model download.
+
+Enroll your voice once (about fifteen seconds of reading aloud) and every
+transcript labels you by name; in a two-person meeting, the other speaker is
+automatically labeled with your teammate's name. Sessions are organized by
+person, so each working relationship keeps a running record. Add project
+names and jargon to your vocabulary and Luxicon grounds transcription in the
+words you actually use. Live captions preview what's being heard while you
+record, and an interrupted recording is recovered automatically on next
+launch — a crash never loses a conversation.
+
+When you need the transcript elsewhere, share it as clean markdown or
+structured JSON — formatted for pasting into the AI assistant of your choice
+for meeting summaries, check-in prep, or review drafting. You can also start
+hands-free: "Start a one on one with Josh" works from Siri, Shortcuts, or
+the Action button.
+
+This is an early beta from Davidson College Technology & Innovation, free
+and open source (https://github.com/DavidsonCollege/luxicon). Recording a
+conversation requires consent — please tell the other person before you
+record.
+
+## TestFlight — What to Test (per-build notes, 4000 chars max)
+
+To test: (1) Add a person, then enroll your voice under My Voice (~15
+seconds of reading aloud) so transcripts label speakers by name. (2) Record
+a short conversation — the FIRST transcription downloads ~700 MB of speech
+models, so be on Wi-Fi and keep the app open for that one. After that it
+works fully offline. (3) Check the transcript: speaker labels, talk-time
+split, and the share button (markdown export). (4) Add a project name or
+acronym under My Voice → Vocabulary and see whether it transcribes correctly
+in the next recording. (5) Try "Hey Siri, start a one on one with [name] in
+Luxicon."
+
+Known limits: needs a recent iPhone (iOS 18+); transcription pauses if you
+leave the app and resumes when you return (on some iOS 26 devices it
+continues in the background with progress shown as a Live Activity). Always
+tell the other person you're recording.
+
+## TestFlight — Beta App Review notes
+No account or sign-in exists. To exercise the app fully: add a person,
+record a short spoken conversation (any two voices, or one voice reading
+two parts), wait for on-device processing, and open the transcript. First
+transcription downloads ~700 MB of ML models from Hugging Face; no user
+data is transmitted.

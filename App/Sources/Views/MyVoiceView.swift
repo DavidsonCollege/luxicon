@@ -25,6 +25,8 @@ struct MyVoiceView: View {
                     TextField("Name shown in transcripts", text: $store.myName)
                         .onSubmit { store.save() }
                 }
+                TextField("About you — role, team, current focus", text: $store.myContext, axis: .vertical)
+                    .lineLimit(2...6)
             }
 
             Section {

@@ -47,6 +47,16 @@ struct PersonDetailView: View {
                 .listRowBackground(Color.clear)
             }
 
+            Section {
+                TextField("Role, projects, current threads…",
+                          text: contextBinding, axis: .vertical)
+                    .lineLimit(2...6)
+            } header: {
+                Text("Context")
+            } footer: {
+                Text("Background the summarizer uses to interpret your 1-on-1s — e.g. “Senior sysadmin; runs the identity platform; discussing promotion this quarter.” Stays on this device.")
+            }
+
             if sessions.isEmpty {
                 ContentUnavailableView(
                     "No sessions yet",
@@ -100,6 +110,7 @@ struct PersonDetailView: View {
             }
         }
         .onAppear { writeHistoryFiles() }
+        .onDisappear { store.save() }
         .alert("Mac Sync", isPresented: Binding(
             get: { pushResult != nil }, set: { if !$0 { pushResult = nil } }
         )) { Button("OK") { pushResult = nil } } message: { Text(pushResult ?? "") }
@@ -107,6 +118,17 @@ struct PersonDetailView: View {
         .fullScreenCover(isPresented: $showingRecorder) {
             RecordSheetView(person: person)
         }
+    }
+
+    /// Route values carry a stale Person copy; edit context via the store.
+    private var contextBinding: Binding<String> {
+        Binding(
+            get: { store.person(id: person.id)?.context ?? "" },
+            set: { newValue in
+                guard let i = store.people.firstIndex(where: { $0.id == person.id }) else { return }
+                store.people[i].context = newValue.isEmpty ? nil : newValue
+            }
+        )
     }
 
     /// Transcribed sessions oldest-first, as LongitudinalExport expects.

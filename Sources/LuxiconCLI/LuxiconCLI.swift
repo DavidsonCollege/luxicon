@@ -21,6 +21,7 @@ struct LuxiconCLI {
         guard !args.isEmpty, !["-h", "--help"].contains(args[0]) else {
             print("""
             usage: luxicon-cli <audio-file> [options]
+                   luxicon-cli push <file.json> --token <pairing token>
               --enroll Name=voice.wav   enroll a known voice (repeatable)
               --out <dir>               write transcript.md + transcript.json here
               --title <title>           meeting title (default: file name)
@@ -28,6 +29,24 @@ struct LuxiconCLI {
               --vocab-file terms.json   vocabulary JSON ({"terms":[{"term":...,"soundsLike":[...]}]})
               --engine parakeet|qwen3   ASR engine (qwen3 supports --vocab context injection)
             """)
+            return
+        }
+
+        // Subcommand: push an exported JSON to a LAN listener (tests the
+        // same code path the iPhone app uses).
+        if args[0] == "push" {
+            guard args.count >= 2 else { throw ValidationError("usage: luxicon-cli push <file.json> --token <token>") }
+            let file = URL(fileURLWithPath: args[1])
+            guard let ti = args.firstIndex(of: "--token"), args.indices.contains(ti + 1) else {
+                throw ValidationError("push requires --token <pairing token>")
+            }
+            let payload = try Data(contentsOf: file)
+            var host: String? = nil
+            if let hi = args.firstIndex(of: "--host"), args.indices.contains(hi + 1) { host = args[hi + 1] }
+            print(host.map { "Connecting to \($0)…" } ?? "Discovering listener via Bonjour…")
+            try await LuxiconSync.push(
+                filename: file.lastPathComponent, payload: payload, token: args[ti + 1], host: host)
+            print("Pushed \(file.lastPathComponent) (\(payload.count) bytes)")
             return
         }
 

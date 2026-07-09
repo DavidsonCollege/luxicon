@@ -18,6 +18,10 @@ struct LuxiconMCP {
         try? FileManager.default.createDirectory(
             at: libraryURL, withIntermediateDirectories: true)
 
+        if CommandLine.arguments.contains("listen") {
+            try SyncListener.run(libraryURL: libraryURL)
+        }
+
         let server = Server(
             name: "luxicon",
             version: "1.0.0",
@@ -86,6 +90,18 @@ struct LuxiconMCP {
                 "properties": .object([
                     "person": .object(["type": .string("string")]),
                     "date": .object(["type": .string("string"), "description": .string("ISO 8601 date of the session, e.g. 2026-07-08")]),
+                ]),
+                "required": .array([.string("person"), .string("date")]),
+            ])
+        ),
+        Tool(
+            name: "get_summary",
+            description: "The on-device generated summary (headline + overview) of one session, when the export included it.",
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "person": .object(["type": .string("string")]),
+                    "date": .object(["type": .string("string"), "description": .string("ISO 8601 date, e.g. 2026-07-08")]),
                 ]),
                 "required": .array([.string("person"), .string("date")]),
             ])
@@ -165,6 +181,18 @@ struct LuxiconMCP {
                 throw ToolError(message: "No session for '\(person)' on \(date). Use list_sessions for dates.")
             }
             return TranscriptExport.markdown(session.transcript)
+
+        case "get_summary":
+            let person = try require("person")
+            let date = try require("date")
+            guard let session = library.sessions(for: person)
+                .first(where: { Self.day($0.transcript.date) == date }) else {
+                throw ToolError(message: "No session for '\(person)' on \(date).")
+            }
+            guard let summary = session.summary else {
+                return "No summary in this export. Re-export the session from the app after its summary generates (or use get_transcript and summarize directly)."
+            }
+            return "\(summary.headline)\n\n\(summary.overview)"
 
         case "search_transcripts":
             let query = try require("query")

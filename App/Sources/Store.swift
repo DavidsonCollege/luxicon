@@ -47,6 +47,11 @@ final class Store {
     var asrEngine: ASREngine = .parakeet
     /// Generate a summary automatically after each transcription.
     var autoSummarize = true
+    /// Mac sync: pairing token, optional manual host (for squashed-mDNS
+    /// networks), and whether to push automatically after each session.
+    var syncToken: String = ""
+    var syncHost: String = ""
+    var autoPushToMac = false
     /// Remote vocabulary file kept in sync; when set, it is the source of
     /// truth and each sync replaces `vocabularyEntries`.
     var vocabularySourceURL: String = ""
@@ -77,6 +82,9 @@ final class Store {
         var vocabularyHeaders: [HTTPHeader]?
         var vocabularyLastSync: Date?
         var autoSummarize: Bool?
+        var syncToken: String?
+        var syncHost: String?
+        var autoPushToMac: Bool?
     }
 
     static let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -115,6 +123,9 @@ final class Store {
         vocabularyHeaders = persisted.vocabularyHeaders ?? []
         vocabularyLastSync = persisted.vocabularyLastSync
         autoSummarize = persisted.autoSummarize ?? true
+        syncToken = persisted.syncToken ?? ""
+        syncHost = persisted.syncHost ?? ""
+        autoPushToMac = persisted.autoPushToMac ?? false
     }
 
     func save() {
@@ -126,7 +137,10 @@ final class Store {
             vocabularySourceURL: vocabularySourceURL.isEmpty ? nil : vocabularySourceURL,
             vocabularyHeaders: vocabularyHeaders.isEmpty ? nil : vocabularyHeaders,
             vocabularyLastSync: vocabularyLastSync,
-            autoSummarize: autoSummarize
+            autoSummarize: autoSummarize,
+            syncToken: syncToken.isEmpty ? nil : syncToken,
+            syncHost: syncHost.isEmpty ? nil : syncHost,
+            autoPushToMac: autoPushToMac
         )
         if let data = try? JSONEncoder().encode(persisted) {
             try? data.write(to: Self.storeURL, options: .atomic)

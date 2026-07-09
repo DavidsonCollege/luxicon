@@ -8,6 +8,7 @@ struct PersonDetailView: View {
     @State private var showingRecorder = false
     @State private var historyURL: URL?
     @State private var historyJSONURL: URL?
+    @State private var pushResult: String?
 
     var body: some View {
         let sessions = store.sessions(for: person)
@@ -67,6 +68,16 @@ struct PersonDetailView: View {
                                 Label("Share Full History (JSON)", systemImage: "curlybraces")
                             }
                         }
+                        if !store.syncToken.isEmpty {
+                            Button {
+                                Task {
+                                    let (ok, total) = await store.pushAll(for: person)
+                                    pushResult = "Pushed \(ok) of \(total) to your Mac."
+                                }
+                            } label: {
+                                Label("Push All to Mac", systemImage: "laptopcomputer.and.arrow.down")
+                            }
+                        }
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
@@ -74,6 +85,9 @@ struct PersonDetailView: View {
             }
         }
         .onAppear { writeHistoryFiles() }
+        .alert("Mac Sync", isPresented: Binding(
+            get: { pushResult != nil }, set: { if !$0 { pushResult = nil } }
+        )) { Button("OK") { pushResult = nil } } message: { Text(pushResult ?? "") }
         .onChange(of: store.sessions) { writeHistoryFiles() }
         .fullScreenCover(isPresented: $showingRecorder) {
             RecordSheetView(person: person)

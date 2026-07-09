@@ -85,7 +85,9 @@ extension Store {
             update(s)
             refreshKeepAwake()
             if s.status == .ready, self.autoSummarize {
-                self.startSummarizing(s)
+                self.startSummarizing(s)  // auto-push fires after the summary lands
+            } else if s.status == .ready {
+                self.autoPushIfEnabled(s)
             }
         }
         processing.tasks[sessionId] = task

@@ -172,6 +172,26 @@ struct MyVoiceView: View {
                 Text("Parakeet is fast and battery-friendly; vocabulary is applied as a correction pass. Qwen3 injects your vocabulary directly into the recognizer (better on unusual names) but downloads ~400 MB more and runs slower. Automatic summaries use an on-device language model (one-time ~400 MB download); nothing leaves the phone.")
             }
 
+            Section {
+                TextField("Pairing token from `luxicon-mcp listen`", text: $store.syncToken)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .onChange(of: store.syncToken) { store.save() }
+                if !store.syncToken.isEmpty {
+                    TextField("Mac address (optional, e.g. 192.168.1.5)", text: $store.syncHost)
+                        .keyboardType(.numbersAndPunctuation)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onChange(of: store.syncHost) { store.save() }
+                    Toggle("Push automatically after each 1-on-1", isOn: $store.autoPushToMac)
+                        .onChange(of: store.autoPushToMac) { store.save() }
+                }
+            } header: {
+                Text("Mac sync")
+            } footer: {
+                Text("Send transcripts and summaries to a Mac running `luxicon-mcp listen`, so you can query them from Claude. Everything stays on your local network. Enter the Mac's address if it isn't found automatically (common on enterprise Wi-Fi that blocks discovery).")
+            }
+
             if let errorMessage {
                 Text(errorMessage).foregroundStyle(.red).font(.footnote)
             }

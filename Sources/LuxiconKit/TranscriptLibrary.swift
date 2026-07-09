@@ -13,6 +13,7 @@ public struct TranscriptLibrary {
     public struct Session {
         public var person: String
         public var transcript: MeetingTranscript
+        public var summary: SessionSummary?
         public var sourceFile: String
     }
 
@@ -55,6 +56,7 @@ public struct TranscriptLibrary {
         struct SessionEnvelope: Decodable {
             let kind: String?
             let transcript: MeetingTranscript
+            let summary: SessionSummary?
         }
         struct BundleEnvelope: Decodable {
             let kind: String?
@@ -64,17 +66,17 @@ public struct TranscriptLibrary {
 
         if let bundle = try? decoder.decode(BundleEnvelope.self, from: data) {
             return bundle.transcripts.map {
-                Session(person: bundle.personName, transcript: $0, sourceFile: sourceFile)
+                Session(person: bundle.personName, transcript: $0, summary: nil, sourceFile: sourceFile)
             }
         }
         if let envelope = try? decoder.decode(SessionEnvelope.self, from: data) {
             let t = envelope.transcript
             return [Session(person: personName(for: t, folderName: folderName),
-                            transcript: t, sourceFile: sourceFile)]
+                            transcript: t, summary: envelope.summary, sourceFile: sourceFile)]
         }
         if let transcript = try? decoder.decode(MeetingTranscript.self, from: data) {
             return [Session(person: personName(for: transcript, folderName: folderName),
-                            transcript: transcript, sourceFile: sourceFile)]
+                            transcript: transcript, summary: nil, sourceFile: sourceFile)]
         }
         return []
     }

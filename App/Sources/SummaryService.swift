@@ -48,6 +48,7 @@ extension Store {
                 if var s = self.sessions.first(where: { $0.id == sessionId }) {
                     s.summary = summary
                     self.update(s)
+                    self.autoPushIfEnabled(s)
                 }
             } catch {
                 // Backgrounded or failed: leave the session summary-less; the

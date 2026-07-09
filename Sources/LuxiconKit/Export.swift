@@ -20,17 +20,19 @@ public enum TranscriptExport {
     }
 
     /// Structured JSON (stable schema, `schemaVersion` field) for programmatic
-    /// AI consumption — e.g. an MCP server or batch analysis.
-    public static func json(_ t: MeetingTranscript) throws -> Data {
+    /// AI consumption — e.g. an MCP server or batch analysis. The summary
+    /// rides along when present (it stays out of the markdown export).
+    public static func json(_ t: MeetingTranscript, summary: SessionSummary? = nil) throws -> Data {
         struct Envelope: Encodable {
             let schemaVersion = 1
             let kind = "one-on-one"
             let transcript: MeetingTranscript
+            let summary: SessionSummary?
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        return try encoder.encode(Envelope(transcript: t))
+        return try encoder.encode(Envelope(transcript: t, summary: summary))
     }
 
     /// Standalone summary export — deliberately separate from the transcript

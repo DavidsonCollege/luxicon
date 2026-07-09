@@ -163,10 +163,32 @@ struct SessionRow: View {
             case .processing:
                 ProgressView()
             case .ready:
+                if !store.syncToken.isEmpty {
+                    syncBadge
+                }
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
             case .failed:
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             }
+        }
+    }
+
+    /// Small Mac Sync state mark, shown only while Mac Sync is enabled.
+    @ViewBuilder
+    private var syncBadge: some View {
+        switch session.macSyncState {
+        case .synced:
+            Image(systemName: "laptopcomputer")
+                .font(.caption)
+                .foregroundStyle(.green)
+        case .failed:
+            Image(systemName: "laptopcomputer.trianglebadge.exclamationmark")
+                .font(.caption)
+                .foregroundStyle(.orange)
+        case .pending:
+            Image(systemName: "laptopcomputer")
+                .font(.caption)
+                .foregroundStyle(.quaternary)
         }
     }
 }

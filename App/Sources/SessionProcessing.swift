@@ -18,6 +18,10 @@ final class ProcessingState {
     @ObservationIgnored var tasks: [UUID: Task<Void, Never>] = [:]
     /// Sessions cancelled by backgrounding, to auto-resume on foreground.
     @ObservationIgnored var interrupted: Set<UUID> = []
+    /// Tracks scene phase so a cancelled task finishing after the app is
+    /// already foreground again can resume itself (the foreground sweep may
+    /// have run before the task wrote its status back).
+    @ObservationIgnored var inBackground = false
     /// True while the record screen is capturing audio.
     @ObservationIgnored var recordingActive = false
 
@@ -49,7 +53,11 @@ extension Store {
 
         let task = Task {
             do {
-                let audio = try MeetingPipeline.loadAudio(url: audioURL)
+                // Decode off the main actor: an hour-long file takes seconds
+                // and this Task otherwise inherits Store's @MainActor.
+                let audio = try await Task.detached {
+                    try MeetingPipeline.loadAudio(url: audioURL)
+                }.value
                 var transcript = try await PipelineService.shared.process(
                     audio: audio,
                     title: s.title,
@@ -84,12 +92,33 @@ extension Store {
             if #available(iOS 26.0, *) {
                 ContinuedProcessing.shared.end(sessionId: sessionId, success: s.status == .ready)
             }
-            update(s)
+            // Merge onto the CURRENT stored record: fields that changed during
+            // the minutes of pipeline work (a push outcome, a speaker rename)
+            // must not be reverted by writing back this task's stale copy.
+            if var current = self.sessions.first(where: { $0.id == sessionId }) {
+                current.status = s.status
+                current.transcript = s.transcript
+                current.summary = s.summary
+                current.errorMessage = s.errorMessage
+                if s.status == .ready {
+                    // New transcript ⇒ any earlier push refers to older bytes.
+                    current.lastPushDate = nil
+                    current.lastPushError = nil
+                }
+                update(current)
+                s = current
+            }
             refreshKeepAwake()
             if s.status == .ready, self.autoSummarize {
                 self.startSummarizing(s)  // auto-push fires after the summary lands
             } else if s.status == .ready {
                 self.autoPushIfEnabled(s)
+            } else if s.status == .recorded, !processing.inBackground,
+                      processing.interrupted.remove(sessionId) != nil {
+                // Backgrounding cancelled this task, but the app returned to
+                // the foreground before the status write landed — the sweep in
+                // handleScenePhaseChange already ran and missed it. Resume now.
+                self.startProcessing(s)
             }
         }
         processing.tasks[sessionId] = task
@@ -113,6 +142,7 @@ extension Store {
     /// app returns to the foreground — unless a continuous background task
     /// with GPU access covers the session (iOS 26+, supported devices).
     func handleScenePhaseChange(toBackground: Bool) {
+        processing.inBackground = toBackground
         if toBackground {
             for (id, task) in processing.tasks {
                 // Sessions holding a GPU-granted continuous background task
@@ -131,6 +161,10 @@ extension Store {
             for id in ids {
                 if let session = sessions.first(where: { $0.id == id }), session.status == .recorded {
                     startProcessing(session)
+                } else if processing.tasks[id] != nil {
+                    // Cancelled task hasn't written its status back yet; leave
+                    // it marked so its completion can resume it (see above).
+                    processing.interrupted.insert(id)
                 }
             }
         }

@@ -67,7 +67,9 @@ struct RecordSheetView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
-                    .disabled(saving || !recorder.isRecording)
+                    // The 1 s floor mirrors crash recovery's discard threshold:
+                    // a sub-second tap would create an unprocessable session.
+                    .disabled(saving || !recorder.isRecording || recorder.duration < 1)
                     .padding(.horizontal)
                 }
                 .padding(.bottom, 24)

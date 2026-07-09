@@ -24,6 +24,7 @@ extension SessionRecord {
 extension Store {
     enum PushOutcome: Equatable {
         case notConfigured
+        case skipped   // a push for this session is already on the wire
         case success
         case failure(String)
     }
@@ -31,10 +32,18 @@ extension Store {
     /// Push one session's export envelope (transcript + summary).
     @discardableResult
     func pushToMac(_ session: SessionRecord) async -> PushOutcome {
+        // Re-fetch by id: callers hold value copies that may be minutes old
+        // (retry sweeps are slow against an unreachable Mac), and pushing a
+        // stale snapshot while stamping it "synced now" lies to the user.
+        guard let session = sessions.first(where: { $0.id == session.id }) else {
+            return .notConfigured
+        }
         let token = syncToken.trimmingCharacters(in: .whitespaces)
         guard !token.isEmpty, let transcript = session.transcript else {
             return .notConfigured
         }
+        guard pushesInFlight.insert(session.id).inserted else { return .skipped }
+        defer { pushesInFlight.remove(session.id) }
         let outcome: PushOutcome
         do {
             let payload = try TranscriptExport.json(transcript, summary: session.summary)
@@ -66,7 +75,7 @@ extension Store {
             sessions[i].lastPushError = nil
         case .failure(let message):
             sessions[i].lastPushError = message
-        case .notConfigured:
+        case .notConfigured, .skipped:
             return
         }
         save()

@@ -69,8 +69,7 @@ struct PeopleListView: View {
                 case .myVoice: MyVoiceView()
                 }
             }
-            .onAppear { writePeopleFile(); handleRouteArgument() }
-            .onChange(of: store.people) { writePeopleFile() }
+            .onAppear { handleRouteArgument() }
             .fileImporter(
                 isPresented: $importingPeople,
                 allowedContentTypes: [.json, .plainText, .text]
@@ -105,6 +104,11 @@ struct PeopleListView: View {
                         } label: {
                             Label("Import People…", systemImage: "square.and.arrow.down")
                         }
+                        // Menu content renders on open, so this refreshes the
+                        // export file only when it might be shared — the roster
+                        // (names + contexts) shouldn't sit in tmp rewritten on
+                        // every keystroke of a context field.
+                        .onAppear { writePeopleFile() }
                         if let peopleFileURL {
                             ShareLink(item: peopleFileURL) {
                                 Label("Export People", systemImage: "square.and.arrow.up")
@@ -173,7 +177,12 @@ struct PeopleListView: View {
 
     /// Programmatic navigation for screenshot automation and UI testing:
     /// launch with `-route person:<uuid>` / `session:<uuid>` / `myvoice`.
+    /// Debug builds only — no reason to ship a navigation backdoor, and
+    /// screenshot runs use Debug configurations.
     private func handleRouteArgument() {
+        #if !DEBUG
+        return
+        #else
         let args = ProcessInfo.processInfo.arguments
         guard let i = args.firstIndex(of: "-route"), args.indices.contains(i + 1) else { return }
         let parts = args[i + 1].split(separator: ":", maxSplits: 1).map(String.init)
@@ -199,6 +208,7 @@ struct PeopleListView: View {
         default:
             break
         }
+        #endif
     }
 
     /// ShareLink needs a file URL ready before the tap.

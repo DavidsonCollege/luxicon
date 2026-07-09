@@ -110,7 +110,12 @@ struct PersonDetailView: View {
             }
         }
         .onAppear { writeHistoryFiles() }
-        .onDisappear { store.save() }
+        .onDisappear {
+            store.save()
+            // Full-history exports don't belong in tmp longer than the view.
+            if let historyURL { try? FileManager.default.removeItem(at: historyURL) }
+            if let historyJSONURL { try? FileManager.default.removeItem(at: historyJSONURL) }
+        }
         .alert("Mac Sync", isPresented: Binding(
             get: { pushResult != nil }, set: { if !$0 { pushResult = nil } }
         )) { Button("OK") { pushResult = nil } } message: { Text(pushResult ?? "") }

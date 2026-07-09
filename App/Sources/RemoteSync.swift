@@ -5,6 +5,32 @@ import Foundation
 /// GitHub-specific credential hints.
 enum RemoteSync {
 
+    /// Fetch with sanitized headers and redirect protection. Use this instead
+    /// of URLSession directly for any request that carries sync auth headers.
+    static func fetch(url: URL, headers: [Store.HTTPHeader]) async throws -> (Data, URLResponse) {
+        try await URLSession.shared.data(
+            for: request(url: url, headers: headers), delegate: redirectGuard)
+    }
+
+    /// URLSession copies the original headers — Authorization included — onto
+    /// every redirect request. A cross-host or non-https hop would replay the
+    /// user's token somewhere it was never meant to go, so refuse to follow;
+    /// the sync then surfaces the 3xx status as an error instead.
+    private static let redirectGuard = RedirectGuard()
+
+    private final class RedirectGuard: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+        func urlSession(
+            _ session: URLSession, task: URLSessionTask,
+            willPerformHTTPRedirection response: HTTPURLResponse,
+            newRequest request: URLRequest,
+            completionHandler: @escaping @Sendable (URLRequest?) -> Void
+        ) {
+            let sameHost = request.url?.host == task.originalRequest?.url?.host
+            let https = request.url?.scheme?.lowercased() == "https"
+            completionHandler(sameHost && https ? request : nil)
+        }
+    }
+
     /// Trim newlines too: a pasted token with a trailing newline makes
     /// CFNetwork silently drop the header. Skip blank rows entirely so an
     /// accidentally-added duplicate can't overwrite a real one (setValue
@@ -44,6 +70,9 @@ enum RemoteSync {
                 if code == 404 {
                     // Same ambiguity on non-GitHub hosts; say so generically.
                     return message + " Check the URL — private files can also return 404 when the Authorization header is missing or invalid."
+                }
+                if (300..<400).contains(code) {
+                    return message + " Luxicon doesn't follow redirects to another host (they would carry your auth headers there) — point at the final URL directly."
                 }
                 return message
             }

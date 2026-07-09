@@ -85,6 +85,9 @@ final class Store {
     @ObservationIgnored var peopleLastSyncAttempt: Date?
     /// Rate limit for the foreground failed-push retry sweep.
     @ObservationIgnored var lastPushRetrySweep: Date?
+    /// Sessions with a push on the wire; auto-push, manual retry, and the
+    /// foreground sweep can otherwise target one session concurrently.
+    @ObservationIgnored var pushesInFlight: Set<UUID> = []
     /// Set when the persisted library could not be read at launch (the file
     /// is quarantined, never overwritten). Shown once by the root view.
     var startupWarning: String?
@@ -355,16 +358,31 @@ final class Store {
     func importPeople(_ imported: [PersonImport]) -> (added: Int, updated: Int) {
         var added = 0, updated = 0
         for record in imported {
-            if let i = people.firstIndex(where: {
-                $0.name.caseInsensitiveCompare(record.name) == .orderedSame
-            }) {
-                if let context = record.context, people[i].context != context {
-                    people[i].context = context
+            // "You" are not a roster row: an org-chart-fed file usually
+            // includes the manager — route that context to My Voice instead
+            // of forking a duplicate Person under your own name.
+            if record.name.caseInsensitiveCompare(myName) == .orderedSame {
+                if let context = record.context, myContext != context {
+                    myContext = context
                     updated += 1
                 }
-            } else {
+                continue
+            }
+            let matches = people.indices.filter {
+                people[$0].name.caseInsensitiveCompare(record.name) == .orderedSame
+            }
+            if matches.isEmpty {
                 people.append(Person(name: record.name, context: record.context))
                 added += 1
+            } else if let context = record.context {
+                // Duplicate local names are possible; update every match so
+                // context can't silently land on only the wrong row.
+                var changed = false
+                for i in matches where people[i].context != context {
+                    people[i].context = context
+                    changed = true
+                }
+                if changed { updated += 1 }
             }
         }
         save()
@@ -400,7 +418,7 @@ final class Store {
             title: "1-on-1 with \(person.name)",
             date: Date()
         )
-        try JSONEncoder().encode(sidecar).write(to: sidecarURL(id: id))
+        try JSONEncoder().encode(sidecar).write(to: sidecarURL(id: id), options: .atomic)
         return inProgressAudioURL(id: id)
     }
 

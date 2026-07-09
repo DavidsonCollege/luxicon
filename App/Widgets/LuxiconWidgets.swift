@@ -26,6 +26,8 @@ struct RecordingLiveActivity: Widget {
                     Text(context.attributes.personName)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        // Redact who you're meeting with on the locked lock screen.
+                        .privacySensitive()
                 }
                 Spacer()
                 Text(timerInterval: timerRange(context), countsDown: false)
@@ -51,6 +53,7 @@ struct RecordingLiveActivity: Widget {
                     Text("1-on-1 with \(context.attributes.personName)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .privacySensitive()
                 }
             } compactLeading: {
                 Image(systemName: "record.circle")

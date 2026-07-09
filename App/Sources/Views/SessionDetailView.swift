@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import LuxiconKit
 
 /// One session: processing state, transcript, stats, export.
@@ -118,13 +119,13 @@ struct TranscriptView: View {
                         }
                     }
                     Button {
-                        UIPasteboard.general.string = TranscriptExport.markdown(transcript)
+                        copyToPasteboard(TranscriptExport.markdown(transcript))
                     } label: {
                         Label("Copy Markdown", systemImage: "doc.on.doc")
                     }
                     Button {
                         if let data = try? TranscriptExport.json(transcript) {
-                            UIPasteboard.general.string = String(decoding: data, as: UTF8.self)
+                            copyToPasteboard(String(decoding: data, as: UTF8.self))
                         }
                     } label: {
                         Label("Copy JSON", systemImage: "curlybraces")
@@ -141,17 +142,26 @@ struct TranscriptView: View {
         }
         .onAppear { writeExportFile() }
         .onChange(of: session.summary) { writeExportFile() }
+        .onDisappear {
+            // Transcript copies don't belong in tmp longer than the view.
+            if let exportURL { try? FileManager.default.removeItem(at: exportURL) }
+            if let summaryURL { try? FileManager.default.removeItem(at: summaryURL) }
+        }
         .alert("Rename Speaker", isPresented: Binding(
             get: { renamingSpeakerId != nil },
             set: { if !$0 { renamingSpeakerId = nil } }
         )) {
             TextField("Name", text: $renameText)
             Button("Rename") {
-                if let id = renamingSpeakerId {
+                let name = renameText.trimmingCharacters(in: .whitespaces)
+                if let id = renamingSpeakerId, !name.isEmpty {
                     var s = session
                     var t = transcript
-                    t.setName(renameText.trimmingCharacters(in: .whitespaces), forSpeaker: id)
+                    t.setName(name, forSpeaker: id)
                     s.transcript = t
+                    // The Mac copy (if any) has the old name: back to pending.
+                    s.lastPushDate = nil
+                    s.lastPushError = nil
                     store.update(s)
                     writeExportFile()
                 }
@@ -254,6 +264,17 @@ struct TranscriptView: View {
             }
         }
         .disabled(isPushing)
+    }
+
+    /// Local-only + expiring: transcripts shouldn't hop devices via Universal
+    /// Clipboard or linger in the pasteboard indefinitely.
+    private func copyToPasteboard(_ text: String) {
+        UIPasteboard.general.setItems(
+            [[UTType.utf8PlainText.identifier: text]],
+            options: [
+                .localOnly: true,
+                .expirationDate: Date().addingTimeInterval(10 * 60),
+            ])
     }
 
     /// ShareLink needs a file URL; write the markdown next to the temp dir.

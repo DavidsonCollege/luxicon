@@ -27,9 +27,8 @@ extension Store {
         }
         peopleLastSyncAttempt = Date()
 
-        let request = RemoteSync.request(url: url, headers: peopleHeaders)
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await RemoteSync.fetch(url: url, headers: peopleHeaders)
             if let http = response as? HTTPURLResponse,
                !(200..<300).contains(http.statusCode) {
                 throw RemoteSync.SyncError.badStatus(http.statusCode, hint: RemoteSync.gitHubHint(for: http))

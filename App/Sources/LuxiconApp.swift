@@ -16,6 +16,9 @@ struct LuxiconApp: App {
             switch phase {
             case .background:
                 store.handleScenePhaseChange(toBackground: true)
+                // Persist in-memory edits (e.g. context fields save on view
+                // disappear) before iOS gets a chance to jetsam the process.
+                store.save()
             case .active:
                 store.handleScenePhaseChange(toBackground: false)
                 store.syncVocabularyIfConfigured()

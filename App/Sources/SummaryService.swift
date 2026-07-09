@@ -61,6 +61,10 @@ extension Store {
                 }
                 if var s = self.sessions.first(where: { $0.id == sessionId }) {
                     s.summary = summary
+                    // The Mac copy (if any) predates this summary: show
+                    // "pending" rather than a green mark over stale content.
+                    s.lastPushDate = nil
+                    s.lastPushError = nil
                     self.update(s)
                     self.autoPushIfEnabled(s)
                 }

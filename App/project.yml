@@ -6,6 +6,12 @@ options:
 packages:
   Luxicon:
     path: ..
+settings:
+  base:
+    # One version train for the app and every extension: App Store validation
+    # rejects uploads whose extension CFBundleVersion differs from the app's.
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: 6
 targets:
   Luxicon:
     type: application
@@ -30,6 +36,12 @@ targets:
         NSMicrophoneUsageDescription: >-
           Luxicon records your 1-on-1 meetings so it can transcribe them.
           All processing happens on this device; audio never leaves your phone.
+        NSLocalNetworkUsageDescription: >-
+          Luxicon uses the local network only if you set up Mac sync: to find
+          your Mac and send it the transcripts you choose to sync. Without Mac
+          sync, the local network is never used.
+        NSBonjourServices:
+          - _luxicon._tcp
         UIBackgroundModes: [audio]
         # Continuous background tasks (iOS 26+) require a wildcard identifier:
         # bundle ID + semantic context + ".*"; each submission appends a
@@ -52,8 +64,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: edu.davidson.luxicon
         DEVELOPMENT_TEAM: 4Z539UE4TT
-        MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: 5
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "6.0"
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
@@ -71,14 +81,16 @@ targets:
       path: WidgetsInfo.plist
       properties:
         CFBundleDisplayName: Luxicon
+        # Match the parent app's versions; App Store validation rejects
+        # extensions whose CFBundleVersion differs (xcodegen defaults to 1).
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: edu.davidson.luxicon.widgets
         DEVELOPMENT_TEAM: 4Z539UE4TT
-        MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: 5
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "6.0"
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"

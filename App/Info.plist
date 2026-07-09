@@ -37,6 +37,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_luxicon._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Luxicon uses the local network only if you set up Mac sync: to find your Mac and send it the transcripts you choose to sync. Without Mac sync, the local network is never used.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Luxicon records your 1-on-1 meetings so it can transcribe them. All processing happens on this device; audio never leaves your phone.</string>
 	<key>NSSupportsLiveActivities</key>

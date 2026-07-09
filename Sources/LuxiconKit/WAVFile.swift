@@ -13,7 +13,10 @@ public enum WAVFile {
         func append32(_ v: UInt32) { withUnsafeBytes(of: v.littleEndian) { data.append(contentsOf: $0) } }
         func append16(_ v: UInt16) { withUnsafeBytes(of: v.littleEndian) { data.append(contentsOf: $0) } }
 
-        append("RIFF"); append32(UInt32(36 + dataSize)); append("WAVE")
+        // Clamping: RIFF sizes are 32-bit, so past ~4 GB (~37 h at 16 kHz)
+        // the true size can't be represented. A clamped header still lets the
+        // first 4 GB play; trapping would lose the recording entirely.
+        append("RIFF"); append32(UInt32(clamping: 36 + dataSize)); append("WAVE")
         append("fmt "); append32(16)
         append16(1)                              // PCM
         append16(1)                              // mono
@@ -21,7 +24,7 @@ public enum WAVFile {
         append32(UInt32(sampleRate * 2))         // byte rate
         append16(2)                              // block align
         append16(16)                             // bits per sample
-        append("data"); append32(UInt32(dataSize))
+        append("data"); append32(UInt32(clamping: dataSize))
         return data
     }
 

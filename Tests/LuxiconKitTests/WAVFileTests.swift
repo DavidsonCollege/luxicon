@@ -13,6 +13,13 @@ import Foundation
         return data[40..<44].withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }.littleEndian
     }
 
+    @Test func headerClampsSizesBeyondUInt32() {
+        // ~37 h at 16 kHz overflows the RIFF 32-bit size fields; clamping
+        // beats trapping mid-recording (the file is still salvageable).
+        let header = WAVFile.header(sampleCount: 3_000_000_000, sampleRate: 16000)
+        #expect(header.count == WAVFile.headerSize)
+    }
+
     @Test func writerProducesSameBytesAsOneShotEncode() throws {
         let url = tempURL()
         defer { try? FileManager.default.removeItem(at: url) }

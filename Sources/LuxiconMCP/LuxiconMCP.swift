@@ -176,23 +176,29 @@ struct LuxiconMCP {
         case "get_transcript":
             let person = try require("person")
             let date = try require("date")
-            guard let session = library.sessions(for: person)
-                .first(where: { Self.day($0.transcript.date) == date }) else {
+            // Two 1-on-1s with one person on the same day are rare but real;
+            // return every match rather than silently dropping the second.
+            let matches = library.sessions(for: person)
+                .filter { Self.day($0.transcript.date) == date }
+            guard !matches.isEmpty else {
                 throw ToolError(message: "No session for '\(person)' on \(date). Use list_sessions for dates.")
             }
-            return TranscriptExport.markdown(session.transcript)
+            return matches
+                .map { TranscriptExport.markdown($0.transcript) }
+                .joined(separator: "\n\n---\n\n")
 
         case "get_summary":
             let person = try require("person")
             let date = try require("date")
-            guard let session = library.sessions(for: person)
-                .first(where: { Self.day($0.transcript.date) == date }) else {
+            let matches = library.sessions(for: person)
+                .filter { Self.day($0.transcript.date) == date }
+            guard !matches.isEmpty else {
                 throw ToolError(message: "No session for '\(person)' on \(date).")
             }
-            guard let summary = session.summary else {
-                return "No summary in this export. Re-export the session from the app after its summary generates (or use get_transcript and summarize directly)."
-            }
-            return "\(summary.headline)\n\n\(summary.overview)"
+            return matches.map { session in
+                session.summary.map { "\($0.headline)\n\n\($0.overview)" }
+                    ?? "No summary in this export. Re-export the session from the app after its summary generates (or use get_transcript and summarize directly)."
+            }.joined(separator: "\n\n---\n\n")
 
         case "search_transcripts":
             let query = try require("query")

@@ -113,6 +113,7 @@ struct RecordSheetView: View {
             try recorder.start(writingTo: fileURL)
             store.setRecordingActive(true)
             captioner.start()
+            RecordingActivityController.shared.start(personName: person.name)
         } catch {
             startError = "Could not start recording: \(error.localizedDescription)"
         }
@@ -121,6 +122,7 @@ struct RecordSheetView: View {
     private func discard() {
         _ = recorder.stop()
         captioner.reset()
+        RecordingActivityController.shared.end()
         store.discardRecording(id: sessionId)
         dismiss()
     }
@@ -129,6 +131,7 @@ struct RecordSheetView: View {
         saving = true
         let samples = recorder.stop()
         captioner.stop()
+        RecordingActivityController.shared.end()
         do {
             let duration = Double(samples.count) / Double(Recorder.sampleRate)
             let session = try store.finishRecording(id: sessionId, duration: duration)

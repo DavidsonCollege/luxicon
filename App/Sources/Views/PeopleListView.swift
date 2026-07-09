@@ -95,8 +95,26 @@ struct PeopleListView: View {
             .fullScreenCover(item: $coordinator.recordPerson) { person in
                 RecordSheetView(person: person)
             }
+            // Control Center / Action button "Record 1-on-1" control.
+            .sheet(isPresented: $coordinator.quickRecordPickerShown) {
+                if let pending = pendingQuickRecordPerson {
+                    pendingQuickRecordPerson = nil
+                    coordinator.recordPerson = pending
+                }
+            } content: {
+                QuickRecordPickerView { person in
+                    // Presenting the cover mid-sheet-dismissal conflicts;
+                    // hand off via onDismiss instead.
+                    pendingQuickRecordPerson = person
+                    coordinator.quickRecordPickerShown = false
+                }
+                .presentationDetents([.medium])
+            }
+            .onOpenURL { coordinator.handle(url: $0) }
         }
     }
+
+    @State private var pendingQuickRecordPerson: Person?
 
     enum Route: Hashable {
         case person(Person)

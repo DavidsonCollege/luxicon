@@ -8,6 +8,15 @@ final class NavigationCoordinator {
     static let shared = NavigationCoordinator()
     /// When set, the UI presents the record screen for this person.
     var recordPerson: Person?
+    /// Control Center / Action button flow: show the quick person picker.
+    var quickRecordPickerShown = false
+
+    func handle(url: URL) {
+        guard url.scheme == "luxicon" else { return }
+        if url.host == "quick-record" {
+            quickRecordPickerShown = true
+        }
+    }
 }
 
 /// A direct report, exposed to Siri/Shortcuts.

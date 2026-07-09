@@ -54,6 +54,7 @@ Sources/LuxiconMCP/     MCP server + `listen` sync receiver
 App/                    iOS app (SwiftUI, generated with xcodegen)
   Widgets/                Control Center control + Live Activity
 Tests/                  swift-testing unit tests (offline, no models)
+packaging/              Mac listener installer pkg (scripts/build-installer.sh)
 ```
 
 ## Building
@@ -110,10 +111,14 @@ call, so newly pushed or AirDropped exports appear immediately.
 
 ### Mac sync (push from the phone)
 
-Instead of AirDropping exports, run the listener and pair the phone once:
+Instead of AirDropping exports, install the listener and pair the phone
+once. The easy way is the notarized installer from the
+[Releases page](https://github.com/DavidsonCollege/luxicon/releases) —
+download, double-click, one admin prompt, done. From a checkout,
+`scripts/install-listener.sh` does the same via a LaunchAgent.
 
 ```bash
-.build/release/luxicon-mcp listen          # prints a pairing token
+cat ~/Luxicon/.sync-token       # pairing token, created on first listen
 # iPhone: My Voice → Mac sync → enter the token
 ```
 
@@ -143,13 +148,14 @@ asks first.
   restored phone keeps your library.
 - Out of the box, the only network traffic is the model download from
   Hugging Face (no user data attached).
-- Two **opt-in** features create additional traffic, both under your control:
+- Opt-in features create additional traffic, all under your control:
   - **Mac sync** — when you pair a Mac, transcripts and summaries you push
     (or all new ones, if you enable auto-push) travel over your local network
     to that Mac, encrypted with a key derived from the pairing token. Nothing
     goes to the internet. See [docs/sync.md](docs/sync.md).
-  - **Vocabulary URL sync** — when you configure a vocabulary URL, the app
-    fetches it (https only) when opened.
+  - **Vocabulary / people URL sync** — when you point the app at a vocabulary
+    or people-roster file URL, it fetches them (https only, no cross-host
+    redirects) when opened.
 - Export is explicit: you choose what leaves the device, and when.
 
 ## License

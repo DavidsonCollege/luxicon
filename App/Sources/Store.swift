@@ -29,6 +29,11 @@ struct SessionRecord: Codable, Identifiable, Equatable {
     /// On-device LLM summary; separate from the transcript by design.
     var summary: SessionSummary?
     var errorMessage: String?
+    /// Mac Sync: when this session last pushed successfully, and the error
+    /// message from the last failed attempt (nil after a success). Optionals
+    /// so pre-existing store.json decodes unchanged.
+    var lastPushDate: Date?
+    var lastPushError: String?
 
     var audioFileName: String { "\(id.uuidString).wav" }
 }

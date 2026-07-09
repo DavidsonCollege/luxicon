@@ -1,9 +1,26 @@
 import Foundation
 import LuxiconKit
 
+/// Three-way sync state for the UI. Meaningful only while Mac Sync is
+/// enabled (`!syncToken.isEmpty`) and the session is `.ready`.
+enum MacSyncState: Equatable {
+    case synced(Date)
+    case failed(String)
+    case pending
+}
+
+extension SessionRecord {
+    var macSyncState: MacSyncState {
+        if let error = lastPushError { return .failed(error) }
+        if let date = lastPushDate { return .synced(date) }
+        return .pending
+    }
+}
+
 /// Pushes finalized sessions to the paired Mac (`luxicon-mcp listen`) over the
-/// local network. Fire-and-forget: the phone is a client, so a push simply
-/// fails quietly when the Mac isn't reachable and retries next time.
+/// local network. The phone is a client, so a push simply fails when the Mac
+/// isn't reachable; each attempt's outcome is recorded on the session so the
+/// UI can show it and retry.
 extension Store {
     enum PushOutcome: Equatable {
         case notConfigured
@@ -18,6 +35,7 @@ extension Store {
         guard !token.isEmpty, let transcript = session.transcript else {
             return .notConfigured
         }
+        let outcome: PushOutcome
         do {
             let payload = try TranscriptExport.json(transcript, summary: session.summary)
             let person = person(id: session.personId)?.name ?? "session"
@@ -29,10 +47,29 @@ extension Store {
                 token: token,
                 host: host.isEmpty ? nil : host
             )
-            return .success
+            outcome = .success
         } catch {
-            return .failure((error as? LocalizedError)?.errorDescription ?? "\(error)")
+            outcome = .failure((error as? LocalizedError)?.errorDescription ?? "\(error)")
         }
+        recordPushOutcome(outcome, for: session.id)
+        return outcome
+    }
+
+    /// Write the outcome onto the stored session (looked up by id — the
+    /// parameter is a value copy, and the session may have been deleted
+    /// mid-push).
+    private func recordPushOutcome(_ outcome: PushOutcome, for id: UUID) {
+        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
+        switch outcome {
+        case .success:
+            sessions[i].lastPushDate = Date()
+            sessions[i].lastPushError = nil
+        case .failure(let message):
+            sessions[i].lastPushError = message
+        case .notConfigured:
+            return
+        }
+        save()
     }
 
     /// Auto-push hook: called after a summary lands (or transcription finishes

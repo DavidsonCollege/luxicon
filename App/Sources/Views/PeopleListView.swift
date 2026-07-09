@@ -5,10 +5,11 @@ struct PeopleListView: View {
     @Environment(Store.self) private var store
     @State private var newPersonName = ""
     @State private var showingAddPerson = false
+    @State private var path: [Route] = []
 
     var body: some View {
         @Bindable var coordinator = NavigationCoordinator.shared
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if store.people.isEmpty {
                     ContentUnavailableView {
@@ -57,9 +58,11 @@ struct PeopleListView: View {
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .person(let person): PersonDetailView(person: person)
+                case .session(let id): SessionDetailView(sessionId: id)
                 case .myVoice: MyVoiceView()
                 }
             }
+            .onAppear { handleRouteArgument() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink(value: Route.myVoice) {
@@ -97,6 +100,37 @@ struct PeopleListView: View {
 
     enum Route: Hashable {
         case person(Person)
+        case session(UUID)
         case myVoice
+    }
+
+    /// Programmatic navigation for screenshot automation and UI testing:
+    /// launch with `-route person:<uuid>` / `session:<uuid>` / `myvoice`.
+    private func handleRouteArgument() {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-route"), args.indices.contains(i + 1) else { return }
+        let parts = args[i + 1].split(separator: ":", maxSplits: 1).map(String.init)
+        switch parts.first {
+        case "myvoice":
+            path = [.myVoice]
+        case "person":
+            if let id = parts.last.flatMap(UUID.init(uuidString:)),
+               let person = store.person(id: id) {
+                path = [.person(person)]
+            }
+        case "session":
+            if let id = parts.last.flatMap(UUID.init(uuidString:)),
+               let session = store.sessions.first(where: { $0.id == id }),
+               let person = store.person(id: session.personId) {
+                path = [.person(person), .session(session.id)]
+            }
+        case "record":
+            if let id = parts.last.flatMap(UUID.init(uuidString:)),
+               let person = store.person(id: id) {
+                NavigationCoordinator.shared.recordPerson = person
+            }
+        default:
+            break
+        }
     }
 }

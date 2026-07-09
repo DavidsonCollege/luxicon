@@ -25,6 +25,7 @@ struct LuxiconCLI {
               --out <dir>               write transcript.md + transcript.json here
               --title <title>           meeting title (default: file name)
               --vocab "a, b, c"         names/terms to ground transcription in
+              --vocab-file terms.csv    vocabulary CSV (term,sounds_like,category,notes)
               --engine parakeet|qwen3   ASR engine (qwen3 supports --vocab context injection)
             """)
             return
@@ -34,7 +35,7 @@ struct LuxiconCLI {
         var enrollSpecs: [(String, String)] = []
         var outDir: String?
         var title: String?
-        var vocabulary: [String] = []
+        var vocabulary: [VocabularyEntry] = []
         var engine: ASREngine = .parakeet
         var i = 0
         while i < args.count {
@@ -50,8 +51,12 @@ struct LuxiconCLI {
             case "--title": title = args[i + 1]; i += 2
             case "--vocab":
                 vocabulary += args[i + 1].split(separator: ",").map {
-                    $0.trimmingCharacters(in: .whitespaces)
+                    VocabularyEntry(term: $0.trimmingCharacters(in: .whitespaces))
                 }
+                i += 2
+            case "--vocab-file":
+                let csv = try String(contentsOfFile: args[i + 1], encoding: .utf8)
+                vocabulary += try VocabularyCSV.parse(csv)
                 i += 2
             case "--engine":
                 guard let parsed = ASREngine(rawValue: args[i + 1]) else {

@@ -14,10 +14,15 @@ struct PersonDetailView: View {
                 Button {
                     showingRecorder = true
                 } label: {
-                    Label("Record 1-on-1", systemImage: "record.circle")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                    // Explicit HStack: List rows suppress Label icons while
+                    // still skewing centering; this keeps icon + text centered.
+                    HStack(spacing: 8) {
+                        Image(systemName: "record.circle")
+                        Text("Record 1-on-1")
+                    }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
                 }
                 .buttonStyle(.borderedProminent)
                 .listRowInsets(EdgeInsets())

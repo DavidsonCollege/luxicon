@@ -3,22 +3,84 @@ import Foundation
 import UIKit
 #endif
 
+/// One user-vocabulary term: canonical spelling plus optional known
+/// mishearings and agent-facing metadata (see `VocabularyCSV`).
+public struct VocabularyEntry: Codable, Sendable, Equatable, Hashable {
+    /// Canonical spelling, as it should appear in transcripts.
+    public var term: String
+    /// Known ASR mishearings, replaced exactly (case-insensitive).
+    public var soundsLike: [String]
+    /// name | project | acronym | place | other — organizational metadata.
+    public var category: String?
+    /// Free text for humans/agents; ignored by the pipeline.
+    public var notes: String?
+
+    public init(term: String, soundsLike: [String] = [], category: String? = nil, notes: String? = nil) {
+        self.term = term
+        self.soundsLike = soundsLike
+        self.category = category
+        self.notes = notes
+    }
+}
+
 /// Grounds transcripts in user-specific vocabulary (participant names, org
-/// terms) two ways:
+/// terms) three ways:
 /// 1. `contextString(for:)` — decoder-level biasing for engines that accept a
 ///    context prompt (Qwen3-ASR).
-/// 2. `correct(_:vocabulary:)` — engine-agnostic post-ASR repair of near-miss
-///    words ("Sam Riviera" → "Sam Rivera") via edit-distance matching.
+/// 2. Exact alias replacement — each entry's `soundsLike` mishearings.
+/// 3. Fuzzy repair of near-miss words ("Sam Riviera" → "Sam Rivera") via
+///    edit-distance matching.
 public enum VocabularyCorrector {
 
     /// Context prompt handed to context-capable ASR engines.
-    public static func contextString(for vocabulary: [String]) -> String? {
-        let terms = vocabulary
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    public static func contextString(for entries: [VocabularyEntry]) -> String? {
+        let terms = entries
+            .map { $0.term.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         guard !terms.isEmpty else { return nil }
         return "This conversation may mention the following names and terms: "
             + terms.joined(separator: ", ") + "."
+    }
+
+    /// Full pipeline: exact alias replacement, then fuzzy near-miss repair.
+    public static func correct(_ text: String, entries: [VocabularyEntry]) -> String {
+        var result = text
+        for entry in entries where !entry.soundsLike.isEmpty {
+            result = replaceAliases(in: result, aliases: entry.soundsLike, with: entry.term)
+        }
+        return correct(result, vocabulary: entries.map(\.term))
+    }
+
+    /// Replace exact (case-insensitive, whole-word) occurrences of known
+    /// mishearings with the canonical term. Multi-word aliases supported.
+    static func replaceAliases(in text: String, aliases: [String], with term: String) -> String {
+        var tokens = tokenize(text)
+        for alias in aliases {
+            let aliasWords = alias.split(separator: " ").map { String($0).lowercased() }
+            let n = aliasWords.count
+            guard n >= 1, tokens.count >= n else { continue }
+            var start = 0
+            while start <= tokens.count - n {
+                let window = Array(tokens[start..<(start + n)])
+                let candidate = window.map { $0.core.lowercased() }
+                if candidate == aliasWords, window.allSatisfy({ !$0.core.isEmpty }) {
+                    tokens[start].core = term
+                    tokens[start].suffix = tokens[start + n - 1].suffix
+                    if n > 1 {
+                        for i in (start + 1)..<(start + n) {
+                            tokens[i].prefix = ""; tokens[i].core = ""; tokens[i].suffix = ""
+                        }
+                    }
+                    start += n
+                } else {
+                    start += 1
+                }
+            }
+        }
+        return tokens
+            .map { $0.prefix + $0.core + $0.suffix }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 
     /// Replace near-misses of vocabulary terms in `text`. Multi-word terms

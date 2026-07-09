@@ -40,7 +40,7 @@ final class Store {
     /// Speaker embedding of the user's enrolled voice, if enrolled.
     var myVoiceEmbedding: [Float]?
     /// User-defined terms (jargon, project names) to ground transcription in.
-    var customVocabulary: [String] = []
+    var vocabularyEntries: [VocabularyEntry] = []
     /// Which ASR engine transcribes turns.
     var asrEngine: ASREngine = .parakeet
 
@@ -49,7 +49,9 @@ final class Store {
         var sessions: [SessionRecord]
         var myName: String
         var myVoiceEmbedding: [Float]?
+        /// Pre-0.1.0(4) plain-string vocabulary; migrated to `vocabularyEntries`.
         var customVocabulary: [String]?
+        var vocabularyEntries: [VocabularyEntry]?
         var asrEngine: ASREngine?
     }
 
@@ -82,7 +84,8 @@ final class Store {
         sessions = persisted.sessions
         myName = persisted.myName
         myVoiceEmbedding = persisted.myVoiceEmbedding
-        customVocabulary = persisted.customVocabulary ?? []
+        vocabularyEntries = persisted.vocabularyEntries
+            ?? (persisted.customVocabulary ?? []).map { VocabularyEntry(term: $0) }
         asrEngine = persisted.asrEngine ?? .parakeet
     }
 
@@ -90,7 +93,8 @@ final class Store {
         let persisted = Persisted(
             people: people, sessions: sessions,
             myName: myName, myVoiceEmbedding: myVoiceEmbedding,
-            customVocabulary: customVocabulary, asrEngine: asrEngine
+            customVocabulary: nil, vocabularyEntries: vocabularyEntries,
+            asrEngine: asrEngine
         )
         if let data = try? JSONEncoder().encode(persisted) {
             try? data.write(to: Self.storeURL, options: .atomic)
@@ -139,10 +143,28 @@ final class Store {
     }
 
     /// Terms likely to occur in any session: everyone's names + custom glossary.
-    var vocabulary: [String] {
-        var terms = people.map(\.name) + customVocabulary
-        if myName != "Me" { terms.append(myName) }
-        return terms
+    var vocabulary: [VocabularyEntry] {
+        var entries = people.map { VocabularyEntry(term: $0.name, category: "name") }
+        if myName != "Me" {
+            entries.append(VocabularyEntry(term: myName, category: "name"))
+        }
+        return entries + vocabularyEntries
+    }
+
+    /// Merge imported entries into the glossary; imported rows win on term
+    /// collisions (case-insensitive). Returns the number of entries applied.
+    func importVocabulary(_ imported: [VocabularyEntry]) -> Int {
+        for entry in imported {
+            if let i = vocabularyEntries.firstIndex(where: {
+                $0.term.caseInsensitiveCompare(entry.term) == .orderedSame
+            }) {
+                vocabularyEntries[i] = entry
+            } else {
+                vocabularyEntries.append(entry)
+            }
+        }
+        save()
+        return imported.count
     }
 
     // MARK: - In-progress recording (crash recovery)

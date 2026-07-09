@@ -27,7 +27,7 @@ actor PipelineService {
         title: String,
         date: Date,
         enrollments: [VoiceEnrollment],
-        vocabulary: [String],
+        vocabulary: [VocabularyEntry],
         engine: ASREngine,
         progress: @Sendable @escaping (Double, String) -> Void
     ) async throws -> MeetingTranscript {

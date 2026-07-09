@@ -125,7 +125,7 @@ public final class MeetingPipeline {
         title: String,
         date: Date,
         enrollments: [VoiceEnrollment] = [],
-        vocabulary: [String] = [],
+        vocabulary: [VocabularyEntry] = [],
         options: Options = .oneOnOne,
         progress: ((Double, String) -> Void)? = nil
     ) throws -> MeetingTranscript {
@@ -159,7 +159,7 @@ public final class MeetingPipeline {
             let slice = Array(audio[lo..<hi])
             let asrResult = asr.transcribeTurn(slice, sampleRate: sr, context: context)
             var text = asrResult.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            text = VocabularyCorrector.correct(text, vocabulary: vocabulary)
+            text = VocabularyCorrector.correct(text, entries: vocabulary)
             guard !text.isEmpty else { continue }
             turns.append(TranscriptTurn(
                 id: turns.count,

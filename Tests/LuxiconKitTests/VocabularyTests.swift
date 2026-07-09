@@ -61,8 +61,10 @@ import Testing
 
     @Test func contextStringBuildsAndSkipsEmpty() {
         #expect(VocabularyCorrector.contextString(for: []) == nil)
-        #expect(VocabularyCorrector.contextString(for: ["  "]) == nil)
-        let ctx = VocabularyCorrector.contextString(for: ["Sam Rivera", "Choreo"])
+        #expect(VocabularyCorrector.contextString(for: [VocabularyEntry(term: "  ")]) == nil)
+        let ctx = VocabularyCorrector.contextString(for: [
+            VocabularyEntry(term: "Sam Rivera"), VocabularyEntry(term: "Choreo"),
+        ])
         #expect(ctx?.contains("Sam Rivera, Choreo") == true)
     }
 }

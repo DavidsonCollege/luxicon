@@ -11,6 +11,9 @@ struct MyVoiceView: View {
     @State private var isEmbedding = false
     @State private var errorMessage: String?
     @State private var newTerm = ""
+    @State private var vocabularyFileURL: URL?
+    @State private var importingVocabulary = false
+    @State private var importResult: String?
 
     private static let minSeconds: Double = 8
 
@@ -62,11 +65,18 @@ struct MyVoiceView: View {
             }
 
             Section {
-                ForEach(store.customVocabulary, id: \.self) { term in
-                    Text(term)
+                ForEach(store.vocabularyEntries, id: \.term) { entry in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.term)
+                        if !entry.soundsLike.isEmpty {
+                            Text("sounds like: \(entry.soundsLike.joined(separator: ", "))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 .onDelete { offsets in
-                    store.customVocabulary.remove(atOffsets: offsets)
+                    store.vocabularyEntries.remove(atOffsets: offsets)
                     store.save()
                 }
                 HStack {
@@ -75,10 +85,20 @@ struct MyVoiceView: View {
                     Button("Add") { addTerm() }
                         .disabled(newTerm.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
+                if let vocabularyFileURL {
+                    ShareLink(item: vocabularyFileURL) {
+                        Label("Export Vocabulary Template", systemImage: "square.and.arrow.up")
+                    }
+                }
+                Button {
+                    importingVocabulary = true
+                } label: {
+                    Label("Import Vocabulary…", systemImage: "square.and.arrow.down")
+                }
             } header: {
                 Text("Vocabulary")
             } footer: {
-                Text("Project names, acronyms, jargon — words transcription tends to get wrong. Your name and your people's names are included automatically.")
+                Text("Project names, acronyms, jargon — words transcription tends to get wrong. Your name and your people's names are included automatically. Export the CSV template, have a person or AI assistant fill in terms and common mishearings, then import it back.")
             }
 
             Section {
@@ -98,18 +118,59 @@ struct MyVoiceView: View {
             }
         }
         .navigationTitle("My Voice")
+        .onAppear { writeVocabularyFile() }
+        .onChange(of: store.vocabularyEntries) { writeVocabularyFile() }
         .onDisappear {
             if isRecording { _ = recorder.stop() }
             store.save()
+        }
+        .fileImporter(
+            isPresented: $importingVocabulary,
+            allowedContentTypes: [.commaSeparatedText, .plainText, .text]
+        ) { result in
+            importVocabulary(result)
+        }
+        .alert("Vocabulary Import", isPresented: Binding(
+            get: { importResult != nil },
+            set: { if !$0 { importResult = nil } }
+        )) {
+            Button("OK") { importResult = nil }
+        } message: {
+            Text(importResult ?? "")
         }
     }
 
     private func addTerm() {
         let term = newTerm.trimmingCharacters(in: .whitespaces)
-        guard !term.isEmpty, !store.customVocabulary.contains(term) else { return }
-        store.customVocabulary.append(term)
+        guard !term.isEmpty,
+              !store.vocabularyEntries.contains(where: {
+                  $0.term.caseInsensitiveCompare(term) == .orderedSame
+              }) else { return }
+        store.vocabularyEntries.append(VocabularyEntry(term: term))
         store.save()
         newTerm = ""
+    }
+
+    /// ShareLink needs a file URL ready before the tap.
+    private func writeVocabularyFile() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Luxicon Vocabulary.csv")
+        let csv = VocabularyCSV.template(existing: store.vocabularyEntries)
+        try? csv.write(to: url, atomically: true, encoding: .utf8)
+        vocabularyFileURL = url
+    }
+
+    private func importVocabulary(_ result: Result<URL, Error>) {
+        do {
+            let url = try result.get()
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            let entries = try VocabularyCSV.parse(String(contentsOf: url, encoding: .utf8))
+            let count = store.importVocabulary(entries)
+            importResult = "Imported \(count) terms."
+        } catch {
+            importResult = "Import failed: \(error.localizedDescription)"
+        }
     }
 
     private func startEnrollment() {

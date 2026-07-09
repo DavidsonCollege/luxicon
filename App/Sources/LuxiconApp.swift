@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct SitdownApp: App {
+struct LuxiconApp: App {
     @State private var store = Store()
     @Environment(\.scenePhase) private var scenePhase
 

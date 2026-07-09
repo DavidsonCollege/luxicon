@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Sitdown</string>
+	<string>Luxicon</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -23,7 +23,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Sitdown records your 1-on-1 meetings so it can transcribe them. All processing happens on this device; audio never leaves your phone.</string>
+	<string>Luxicon records your 1-on-1 meetings so it can transcribe them. All processing happens on this device; audio never leaves your phone.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

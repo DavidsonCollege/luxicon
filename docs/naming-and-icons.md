@@ -1,7 +1,7 @@
 # Naming & icon exploration
 
-Working name is **Sitdown**; the app is being renamed to a Davidson/Wildcat-themed
-name. Shortlist, collision checks, and paste-ready icon-generation prompts.
+**Decided: Luxicon** (lux, from the Davidson motto, + lexicon). Working name was
+Sitdown. Shortlist, collision checks, and icon prompts kept for the record.
 
 ## Name shortlist
 

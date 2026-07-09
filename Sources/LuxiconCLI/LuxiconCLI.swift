@@ -1,12 +1,12 @@
 import Foundation
-import SitdownKit
+import LuxiconKit
 import AudioCommon
 
 /// Development harness: process a recording from the command line.
 ///
-///   sitdown-cli meeting.wav [--enroll Name=voice.wav ...] [--out dir] [--title "Weekly 1:1"]
+///   luxicon-cli meeting.wav [--enroll Name=voice.wav ...] [--out dir] [--title "Weekly 1:1"]
 @main
-struct SitdownCLI {
+struct LuxiconCLI {
     static func main() async {
         do {
             try await run()
@@ -20,7 +20,7 @@ struct SitdownCLI {
         var args = Array(CommandLine.arguments.dropFirst())
         guard !args.isEmpty, !["-h", "--help"].contains(args[0]) else {
             print("""
-            usage: sitdown-cli <audio-file> [options]
+            usage: luxicon-cli <audio-file> [options]
               --enroll Name=voice.wav   enroll a known voice (repeatable)
               --out <dir>               write transcript.md + transcript.json here
               --title <title>           meeting title (default: file name)

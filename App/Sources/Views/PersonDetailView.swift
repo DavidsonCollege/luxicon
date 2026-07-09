@@ -1,5 +1,5 @@
 import SwiftUI
-import SitdownKit
+import LuxiconKit
 
 /// One direct report: their session history + record button.
 struct PersonDetailView: View {

@@ -1,6 +1,6 @@
 import Foundation
 import AVFoundation
-import SitdownKit
+import LuxiconKit
 
 /// Captures microphone audio as 16 kHz mono Float32 (the pipeline's input format).
 ///

@@ -2,21 +2,21 @@
 import PackageDescription
 
 let package = Package(
-    name: "Sitdown",
+    name: "Luxicon",
     platforms: [
         .macOS("15.0"),
         .iOS("18.0"),
     ],
     products: [
-        .library(name: "SitdownKit", targets: ["SitdownKit"]),
-        .executable(name: "sitdown-cli", targets: ["SitdownCLI"]),
+        .library(name: "LuxiconKit", targets: ["LuxiconKit"]),
+        .executable(name: "luxicon-cli", targets: ["LuxiconCLI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/soniqo/speech-swift.git", from: "0.0.21"),
     ],
     targets: [
         .target(
-            name: "SitdownKit",
+            name: "LuxiconKit",
             dependencies: [
                 .product(name: "SpeechVAD", package: "speech-swift"),
                 .product(name: "ParakeetASR", package: "speech-swift"),
@@ -26,12 +26,12 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "SitdownCLI",
-            dependencies: ["SitdownKit"]
+            name: "LuxiconCLI",
+            dependencies: ["LuxiconKit"]
         ),
         .testTarget(
-            name: "SitdownKitTests",
-            dependencies: ["SitdownKit"]
+            name: "LuxiconKitTests",
+            dependencies: ["LuxiconKit"]
         ),
     ]
 )

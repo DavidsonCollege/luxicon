@@ -1,5 +1,5 @@
 import Foundation
-import SitdownKit
+import LuxiconKit
 #if os(iOS)
 import UIKit
 #endif

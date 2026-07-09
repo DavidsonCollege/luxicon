@@ -1,5 +1,5 @@
 import Testing
-@testable import SitdownKit
+@testable import LuxiconKit
 
 @Suite struct VocabularyCorrectorTests {
     @Test func fixesNearMissSingleWord() {

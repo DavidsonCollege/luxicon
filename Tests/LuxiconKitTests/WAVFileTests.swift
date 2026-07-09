@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import SitdownKit
+@testable import LuxiconKit
 
 @Suite struct WAVFileTests {
     private func tempURL() -> URL {

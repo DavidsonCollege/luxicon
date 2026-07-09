@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import SitdownKit
+import LuxiconKit
 
 /// A direct report you hold 1-on-1s with.
 struct Person: Codable, Identifiable, Hashable {

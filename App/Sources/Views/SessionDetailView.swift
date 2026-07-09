@@ -1,5 +1,5 @@
 import SwiftUI
-import SitdownKit
+import LuxiconKit
 
 /// One session: processing state, transcript, stats, export.
 struct SessionDetailView: View {

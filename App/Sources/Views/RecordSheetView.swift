@@ -1,5 +1,5 @@
 import SwiftUI
-import SitdownKit
+import LuxiconKit
 
 /// Full-screen recording UI with live caption preview.
 ///

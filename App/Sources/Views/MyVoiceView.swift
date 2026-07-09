@@ -1,5 +1,5 @@
 import SwiftUI
-import SitdownKit
+import LuxiconKit
 
 /// Enroll the user's own voice so their turns are auto-labeled in every transcript.
 struct MyVoiceView: View {
@@ -58,7 +58,7 @@ struct MyVoiceView: View {
             } header: {
                 Text("Voice enrollment")
             } footer: {
-                Text("Read anything aloud for ~15 seconds — a paragraph from a book works well. Sitdown stores only a voice fingerprint (256 numbers), not the audio. With your voice enrolled, 1-on-1 transcripts label you and the other person automatically.")
+                Text("Read anything aloud for ~15 seconds — a paragraph from a book works well. Luxicon stores only a voice fingerprint (256 numbers), not the audio. With your voice enrolled, 1-on-1 transcripts label you and the other person automatically.")
             }
 
             Section {

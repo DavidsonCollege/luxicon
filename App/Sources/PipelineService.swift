@@ -1,5 +1,5 @@
 import Foundation
-import SitdownKit
+import LuxiconKit
 
 /// Owns the (non-Sendable) models and serializes all inference.
 /// Models load lazily on first use and stay resident (~700 MB download on first run).

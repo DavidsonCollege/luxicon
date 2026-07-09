@@ -2,7 +2,7 @@ import Testing
 import Foundation
 import AudioCommon
 import SpeechVAD
-@testable import SitdownKit
+@testable import LuxiconKit
 
 @Suite struct TurnBuildingTests {
     @Test func mergesSameSpeakerWithinGap() {

@@ -52,7 +52,7 @@ struct PeopleListView: View {
                     }
                 }
             }
-            .navigationTitle("Sitdown")
+            .navigationTitle("Luxicon")
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .person(let person): PersonDetailView(person: person)

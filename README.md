@@ -1,4 +1,4 @@
-# Sitdown
+# Luxicon
 
 **On-device 1-on-1 recorder for managers.** Record a sit-down with a direct
 report on your iPhone, get a speaker-labeled transcript that never leaves the
@@ -9,7 +9,7 @@ No cloud APIs. No per-minute pricing. No audio leaving the phone.
 
 ## How it works
 
-1. **Enroll your voice once** (~15 seconds of reading aloud). Sitdown stores a
+1. **Enroll your voice once** (~15 seconds of reading aloud). Luxicon stores a
    256-number voice fingerprint — not the audio.
 2. **Record a 1-on-1** with the phone on the table. When you stop, the app
    diarizes the conversation (who spoke when), transcribes each speaker turn,
@@ -37,11 +37,11 @@ land within a few multiples of that.
 ## Structure
 
 ```
-Sources/SitdownKit/     Core pipeline (platform-neutral Swift package)
+Sources/LuxiconKit/     Core pipeline (platform-neutral Swift package)
   MeetingPipeline.swift   diarize → per-turn ASR → speaker naming
   Models.swift            transcript, turns, stats, enrollment types
   Export.swift            markdown + JSON export
-Sources/SitdownCLI/     macOS command-line harness
+Sources/LuxiconCLI/     macOS command-line harness
 App/                    iOS app (SwiftUI, generated with xcodegen)
 ```
 
@@ -54,7 +54,7 @@ Requires Xcode 16+, iOS 18+ device (A13 or later recommended).
 ```bash
 brew install xcodegen
 cd App && xcodegen generate
-open Sitdown.xcodeproj   # set your signing team, build & run on device
+open Luxicon.xcodeproj   # set your signing team, build & run on device
 ```
 
 Note: diarization uses MLX (Metal) and does not run in the iOS Simulator.
@@ -65,7 +65,7 @@ Use a physical device, or the CLI on a Mac.
 ```bash
 swift build
 bash scripts/build_mlx_metallib.sh debug   # compile MLX Metal shaders
-.build/debug/sitdown-cli meeting.wav \
+.build/debug/luxicon-cli meeting.wav \
     --enroll "Your Name=enrollment.wav" \
     --title "Weekly 1:1" --out ./out
 ```
@@ -81,7 +81,7 @@ swift test
 ## Consent
 
 Recording conversations requires consent — in many jurisdictions, from **all**
-parties. Sitdown shows a reminder in the recording UI, but complying with your
+parties. Luxicon shows a reminder in the recording UI, but complying with your
 local law and your organization's policy is on you. Be the kind of manager who
 asks first.
 

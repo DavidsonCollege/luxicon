@@ -59,4 +59,10 @@ import Foundation
     @Test func promptHandlesEmptyRoster() {
         #expect(PeopleJSON.agentPrompt(existing: []).contains("(none yet)"))
     }
+
+    @Test func promptAsksForDetailedContext() {
+        let prompt = PeopleJSON.agentPrompt(existing: [])
+        #expect(prompt.contains("2-3 paragraphs"))
+        #expect(prompt.contains("recent project updates"))
+    }
 }

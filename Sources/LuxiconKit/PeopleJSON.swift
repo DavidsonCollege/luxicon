@@ -78,13 +78,23 @@ public enum PeopleJSON {
 
         Rules:
         - "name": the person's name exactly as it should appear in transcripts.
-        - "context": 1-3 sentences of background — role, projects, recurring \
-        topics. Write it for a summarizer that has never met them.
+        - "context": 2-3 paragraphs of background, written for a summarizer \
+        that has never met them. Cover their role, team, and seniority; the \
+        projects and systems they own or work on, using the names likely to \
+        come up in conversation; and what is currently live between us — \
+        goals, open challenges, recurring 1-on-1 threads, career-development \
+        topics, and anything recently shipped, decided, or escalated.
+        - Write context as plain prose paragraphs (separated by blank lines \
+        inside the JSON string), not bullet fragments — the summarizer reads \
+        it as narrative background. The example above is abbreviated; real \
+        entries should be much fuller.
         - Importing merges by name and never removes anyone, so include only \
         people to add or update.
 
-        If I haven't provided source material, ask me for a team roster or \
-        org chart before guessing.
+        If I haven't provided source material, ask me before guessing: a team \
+        roster or org chart, recent project updates or status notes, and \
+        anything else you need per person — thin context produces thin \
+        summaries.
 
         My current people — extend and improve, keeping existing entries \
         unless they are clearly wrong:

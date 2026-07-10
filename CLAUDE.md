@@ -28,6 +28,10 @@ scripts/install-listener.sh
 
 Building the app requires Xcode 26+ (iOS 26 SDK symbols, runtime-gated); deployment target is iOS 18. Diarization uses MLX/Metal and does not run in the iOS Simulator — use a physical device, or the CLI on a Mac.
 
+## Releasing (TestFlight, App Store, listener installer)
+
+**Read [docs/releasing.md](docs/releasing.md) before any release work.** It maps every flow to the exact credentials it uses and where they live (Xcode account session for App Store uploads — there is no API key on this machine and `altool` is dead; Developer ID identities in the login keychain; notarytool keychain profile `luxicon`; GitHub Actions secrets for CI listener releases). Never write credential values into this public repo.
+
 ## Architecture
 
 Three layers, split by what must stay platform-neutral:

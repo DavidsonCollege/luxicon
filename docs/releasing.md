@@ -40,6 +40,14 @@ Traps that have burned agents before:
 - **Keychain P12 export is GUI-gated** — `security export` of private keys
   fails non-interactively. If a CI secret needs re-creating, base64 the
   `.p12` files from `~/Downloads` instead.
+- **`error: exportArchive Failed to Use Accounts`** means the Xcode Apple
+  account session is gone (it can vanish — signed out or invalidated —
+  even between consecutive days). Confirm with `defaults read
+  com.apple.dt.Xcode DVTDeveloperAccountManagerAppleIDLists` (empty
+  `IDE.Identifiers.Prod` = no accounts). Archiving still succeeds off
+  cached certs, so the failure only surfaces at upload. Fix is GUI-only:
+  Xcode → Settings → Accounts, sign in jdmills@davidson.edu (password +
+  2FA), then re-run the same `-exportArchive` — no need to re-archive.
 
 ---
 

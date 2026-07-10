@@ -13,28 +13,37 @@ struct VocabularyListView: View {
 
     var body: some View {
         Form {
+            // While URL sync is on, the remote file is the source of truth
+            // and would silently overwrite local edits on the next sync —
+            // adding, importing, and deleting are disabled to match.
             Section {
-                HStack {
-                    TextField("Add a name or term", text: $newTerm)
-                        .onSubmit { addTerm() }
-                    Button("Add") { addTerm() }
-                        .disabled(newTerm.trimmingCharacters(in: .whitespaces).isEmpty)
+                if !store.vocabularySyncConfigured {
+                    HStack {
+                        TextField("Add a name or term", text: $newTerm)
+                            .onSubmit { addTerm() }
+                        Button("Add") { addTerm() }
+                            .disabled(newTerm.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
                 }
                 if let vocabularyFileURL {
                     ShareLink(item: vocabularyFileURL) {
                         Label("Export Vocabulary Template", systemImage: "square.and.arrow.up")
                     }
                 }
-                Button {
-                    importingVocabulary = true
-                } label: {
-                    Label("Import Vocabulary…", systemImage: "square.and.arrow.down")
+                if !store.vocabularySyncConfigured {
+                    Button {
+                        importingVocabulary = true
+                    } label: {
+                        Label("Import Vocabulary…", systemImage: "square.and.arrow.down")
+                    }
                 }
                 ShareLink(item: VocabularyJSON.agentPrompt(existing: store.vocabularyEntries)) {
                     Label("Share Agent Prompt", systemImage: "sparkles")
                 }
             } footer: {
-                Text("Project names, acronyms, jargon — words transcription tends to get wrong. Your name and your people's names are included automatically. Export the JSON template, have a person or AI assistant fill in terms and common mishearings, then import it back.")
+                Text(store.vocabularySyncConfigured
+                    ? "Project names, acronyms, jargon — words transcription tends to get wrong. Your name and your people's names are included automatically. This list is synchronized from a URL (set in My Voice) and read-only here — edit the file it points at."
+                    : "Project names, acronyms, jargon — words transcription tends to get wrong. Your name and your people's names are included automatically. Export the JSON template, have a person or AI assistant fill in terms and common mishearings, then import it back.")
             }
 
             Section {
@@ -52,6 +61,7 @@ struct VocabularyListView: View {
                     store.vocabularyEntries.remove(atOffsets: offsets)
                     store.save()
                 }
+                .deleteDisabled(store.vocabularySyncConfigured)
             } header: {
                 Text("\(store.vocabularyEntries.count) terms")
             }

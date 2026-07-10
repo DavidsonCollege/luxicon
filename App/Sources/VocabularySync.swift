@@ -7,9 +7,16 @@ import LuxiconKit
 extension Store {
     private static let syncCooldown: TimeInterval = 60
 
+    /// True while the glossary is kept synchronized from a URL. The synced
+    /// file is the source of truth, so the vocabulary list UI switches to
+    /// read-only — local edits would be silently replaced on the next sync.
+    var vocabularySyncConfigured: Bool {
+        !vocabularySourceURL.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     /// Foreground/auto trigger; skips if unconfigured or synced recently.
     func syncVocabularyIfConfigured() {
-        guard !vocabularySourceURL.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        guard vocabularySyncConfigured else { return }
         if let last = vocabularyLastSyncAttempt,
            Date().timeIntervalSince(last) < Self.syncCooldown { return }
         Task { await syncVocabulary() }

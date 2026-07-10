@@ -12,6 +12,26 @@ struct Person: Codable, Identifiable, Hashable {
     var context: String?
 }
 
+/// Which engine generates AI summaries. Chosen when enabling the feature,
+/// switchable afterwards in My Voice.
+enum SummaryEngine: String, Codable {
+    case appleIntelligence, gemma
+
+    var backend: MeetingSummarizer.Backend {
+        switch self {
+        case .appleIntelligence: return .appleIntelligence
+        case .gemma: return .gemma4
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .appleIntelligence: return "Apple Intelligence"
+        case .gemma: return "Gemma 4"
+        }
+    }
+}
+
 /// One recorded 1-on-1.
 struct SessionRecord: Codable, Identifiable, Equatable {
     enum Status: String, Codable {
@@ -67,6 +87,9 @@ final class Store {
     /// downloads the ~2.5 GB on-device model. When off, the summary and
     /// context UI is hidden entirely.
     var aiSummariesEnabled = false
+    /// Engine behind the summaries; nil until the user enables the feature
+    /// and picks one. Existing enabled users migrate to .gemma in `load()`.
+    var summaryEngine: SummaryEngine?
     /// Generate a summary automatically after each transcription (only
     /// meaningful while `aiSummariesEnabled`).
     var autoSummarize = true
@@ -129,6 +152,7 @@ final class Store {
         var vocabularyHeaders: [HTTPHeader]?
         var vocabularyLastSync: Date?
         var aiSummariesEnabled: Bool?
+        var summaryEngine: SummaryEngine?
         var autoSummarize: Bool?
         var syncToken: String?
         var syncHost: String?
@@ -213,6 +237,9 @@ final class Store {
         // 0.8B model; the feature is now an explicit opt-in with a larger
         // model, so it starts off for everyone. Old summaries stay readable.
         aiSummariesEnabled = persisted.aiSummariesEnabled ?? false
+        // Engine choice postdates the feature: users who enabled summaries
+        // before it existed were running Gemma and keep exactly that.
+        summaryEngine = persisted.summaryEngine ?? (aiSummariesEnabled ? .gemma : nil)
         autoSummarize = persisted.autoSummarize ?? true
         syncHost = persisted.syncHost ?? ""
         autoPushToMac = persisted.autoPushToMac ?? false
@@ -250,6 +277,7 @@ final class Store {
             vocabularyHeaders: nil,  // Keychain-only since build 6
             vocabularyLastSync: vocabularyLastSync,
             aiSummariesEnabled: aiSummariesEnabled,
+            summaryEngine: summaryEngine,
             autoSummarize: autoSummarize,
             syncToken: nil,          // Keychain-only since build 6
             syncHost: syncHost.isEmpty ? nil : syncHost,
@@ -377,9 +405,14 @@ final class Store {
     /// Merge an imported roster by case-insensitive name: new people are
     /// appended, matches get their context updated when the import provides
     /// one. Never removes anyone — photos and sessions are untouched.
-    func importPeople(_ imported: [PersonImport]) -> (added: Int, updated: Int) {
+    /// The file's "me" entry updates the user's own about-me context.
+    func importPeople(_ file: PeopleFile) -> (added: Int, updated: Int) {
         var added = 0, updated = 0
-        for record in imported {
+        if let context = file.myContext, myContext != context {
+            myContext = context
+            updated += 1
+        }
+        for record in file.people {
             // "You" are not a roster row: an org-chart-fed file usually
             // includes the manager — route that context to My Voice instead
             // of forking a duplicate Person under your own name.
@@ -414,6 +447,11 @@ final class Store {
     /// Roster in the Kit exchange shape, for export and agent prompts.
     var peopleForExport: [PersonImport] {
         people.map { PersonImport(name: $0.name, context: $0.context) }
+    }
+
+    /// The user themself in the exchange shape — the file's "me" entry.
+    var meForExport: PersonImport {
+        PersonImport(name: myName, context: myContext.isEmpty ? nil : myContext)
     }
 
     // MARK: - In-progress recording (crash recovery)

@@ -22,7 +22,9 @@ struct LuxiconCLI {
             print("""
             usage: luxicon-cli <audio-file> [options]
                    luxicon-cli push <file.json> --token <pairing token>
-                   luxicon-cli summarize <transcript.json> [--context "Name=text"] [--context-file "Name=path"]
+                   luxicon-cli summarize <transcript.json> [--backend qwen35|gemma4|apple]
+                                         [--context "Name=text"] [--context-file "Name=path"]
+                                         [--chunk-chars <n>] [--second-pass]
               --enroll Name=voice.wav   enroll a known voice (repeatable)
               --out <dir>               write transcript.md + transcript.json here
               --title <title>           meeting title (default: file name)
@@ -64,6 +66,7 @@ struct LuxiconCLI {
             var secondPass = false
             var modelId: String?
             var modelDir: String?
+            var chunkChars: Int?
             var backend: MeetingSummarizer.Backend = .qwen35
             var j = 2
             while j < args.count {
@@ -81,9 +84,16 @@ struct LuxiconCLI {
                     context.append(SummaryParticipant(name: n, context: text))
                 case "--model": modelId = args[j + 1]
                 case "--model-dir": modelDir = args[j + 1]  // local dir with int4/ inside
+                case "--chunk-chars":
+                    // Debug override of the per-pass budget, to exercise split
+                    // summarization on short transcripts.
+                    guard let n = Int(args[j + 1]), n > 0 else {
+                        throw ValidationError("--chunk-chars expects a positive integer")
+                    }
+                    chunkChars = n
                 case "--backend":
                     guard let b = MeetingSummarizer.Backend(rawValue: args[j + 1]) else {
-                        throw ValidationError("--backend expects qwen35 or gemma4")
+                        throw ValidationError("--backend expects qwen35, gemma4, or apple")
                     }
                     backend = b
                 default: throw ValidationError("unknown option \(args[j])")
@@ -91,23 +101,30 @@ struct LuxiconCLI {
                 j += 2
             }
 
-            print("Loading summarizer model (downloads on first run)…")
+            if backend == .appleIntelligence, AppleIntelligence.status != .available {
+                throw ValidationError("Apple Intelligence is not available here "
+                    + "(\(AppleIntelligence.status)) — needs macOS 26+ with Apple Intelligence on")
+            }
+            print(backend == .appleIntelligence
+                ? "Using the Apple Intelligence system model…"
+                : "Loading summarizer model (downloads on first run)…")
             let summarizer = try await MeetingSummarizer.load(
                 backend: backend,
                 modelId: modelId,
                 cacheDir: modelDir.map { URL(fileURLWithPath: $0) },
-                offlineMode: modelDir != nil
+                offlineMode: modelDir != nil,
+                transcriptCharBudget: chunkChars
             ) { p, stage in
                 print(String(format: "  [%3.0f%%] %@", p * 100, stage))
             }
             let isEmpty = MeetingSummarizer.isEmpty(transcript)
             print("Transcript: \(transcript.turns.count) turns, "
                 + "empty=\(isEmpty), context=\(context.count) participant(s)\n")
-            let result = try summarizer.summarize(transcript, context: context)
+            let result = try await summarizer.summarize(transcript, context: context)
             print("=== LIST LABEL (\(result.headline.count) chars) ===")
             print(result.headline)
             if secondPass {
-                let refined = try summarizer.refineLabel(
+                let refined = try await summarizer.refineLabel(
                     headline: result.headline, overview: result.overview)
                 print("\n=== REFINED LABEL (\(refined.count) chars) ===")
                 print(refined)

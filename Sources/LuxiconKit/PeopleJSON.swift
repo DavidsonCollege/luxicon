@@ -13,6 +13,20 @@ public struct PersonImport: Codable, Sendable, Equatable {
     }
 }
 
+/// A parsed people file: the roster plus the optional top-level "me" entry —
+/// background about the user themself ("about me") that imports route to
+/// My Voice rather than the roster.
+public struct PeopleFile: Sendable, Equatable {
+    /// Context for the user themself, from the top-level "me" entry.
+    public var myContext: String?
+    public var people: [PersonImport]
+
+    public init(myContext: String? = nil, people: [PersonImport]) {
+        self.myContext = myContext
+        self.people = people
+    }
+}
+
 /// JSON exchange format for the people roster — the shape an AI agent or a
 /// web service should produce:
 ///
@@ -20,6 +34,7 @@ public struct PersonImport: Codable, Sendable, Equatable {
 /// {
 ///   "kind": "luxicon-people",
 ///   "schemaVersion": 1,
+///   "me": {"name": "Alex Kim", "context": "Director of infrastructure; leads the platform team"},
 ///   "people": [
 ///     {"name": "Priya Patel", "context": "Senior sysadmin; runs identity platform"}
 ///   ]
@@ -27,24 +42,28 @@ public struct PersonImport: Codable, Sendable, Equatable {
 /// ```
 ///
 /// Parsing is deliberately liberal: a bare array works, entries may be plain
-/// strings (name only), and unknown fields are ignored. Importing merges by
-/// name and never deletes — see `Store.importPeople`.
+/// strings (name only), "me" may be a bare context string, and unknown fields
+/// are ignored. Importing merges by name and never deletes — see
+/// `Store.importPeople`.
 public enum PeopleJSON {
 
-    public static func export(_ people: [PersonImport]) throws -> Data {
-        try envelope(people: people, instructions: nil)
+    public static func export(_ people: [PersonImport], me: PersonImport? = nil) throws -> Data {
+        try envelope(people: people, me: me, instructions: nil)
     }
 
     /// Starter file with inline instructions for whoever (or whatever) fills it in.
-    public static func template(existing: [PersonImport]) throws -> Data {
+    public static func template(existing: [PersonImport], me: PersonImport? = nil) throws -> Data {
         try envelope(
             people: existing,
+            me: me,
             instructions: """
             Add one object per person to "people". Fields: name (required — \
             as it should appear in transcripts, e.g. "Priya Patel"); context \
             (background that helps meeting summaries: role, projects, current \
-            threads). Importing adds new people and updates context on \
-            matching names; it never removes anyone.
+            threads). The top-level "me" is the app's user: its context is \
+            about-me background in the same style, imported into My Voice \
+            instead of the roster. Importing adds new people and updates \
+            context on matching names; it never removes anyone.
             """
         )
     }
@@ -52,12 +71,12 @@ public enum PeopleJSON {
     /// A ready-to-paste prompt for an AI assistant that produces an
     /// importable roster file, with the current people embedded so the
     /// agent extends rather than starts over.
-    public static func agentPrompt(existing: [PersonImport]) -> String {
+    public static func agentPrompt(existing: [PersonImport], me: PersonImport? = nil) -> String {
         let current: String
-        if existing.isEmpty {
+        if existing.isEmpty && me?.context == nil {
             current = "(none yet)"
         } else {
-            current = (try? export(existing)).flatMap { String(data: $0, encoding: .utf8) }
+            current = (try? export(existing, me: me)).flatMap { String(data: $0, encoding: .utf8) }
                 ?? "(none yet)"
         }
         return """
@@ -71,6 +90,7 @@ public enum PeopleJSON {
         {
           "kind": "luxicon-people",
           "schemaVersion": 1,
+          "me": {"name": "Alex Kim", "context": "Director of infrastructure; leads the platform team; hiring two sysadmins this quarter"},
           "people": [
             {"name": "Priya Patel", "context": "Senior sysadmin; runs the identity platform; discussing promotion this quarter"}
           ]
@@ -78,6 +98,9 @@ public enum PeopleJSON {
 
         Rules:
         - "name": the person's name exactly as it should appear in transcripts.
+        - "me": that's me, the user — background about myself in the same \
+        style (role, team, current priorities). It is imported as my own \
+        about-me context, not as a roster entry.
         - "context": 2-3 paragraphs of background, written for a summarizer \
         that has never met them. Cover their role, team, and seniority; the \
         projects and systems they own or work on, using the names likely to \
@@ -105,14 +128,19 @@ public enum PeopleJSON {
         """
     }
 
-    public static func parse(_ data: Data) throws -> [PersonImport] {
+    public static func parse(_ data: Data) throws -> PeopleFile {
         let root = try JSONSerialization.jsonObject(with: data)
+        var myContext: String?
         let rawPeople: [Any]
         if let envelope = root as? [String: Any] {
-            guard let people = envelope["people"] as? [Any] else {
+            myContext = meContext(from: envelope["me"])
+            if let people = envelope["people"] as? [Any] {
+                rawPeople = people
+            } else if myContext != nil {
+                rawPeople = []
+            } else {
                 throw ParseError.missingPeople
             }
-            rawPeople = people
         } else if let array = root as? [Any] {
             rawPeople = array
         } else {
@@ -120,8 +148,8 @@ public enum PeopleJSON {
         }
 
         let records = rawPeople.compactMap(record(from:))
-        guard !records.isEmpty else { throw ParseError.noEntries }
-        return records
+        guard !records.isEmpty || myContext != nil else { throw ParseError.noEntries }
+        return PeopleFile(myContext: myContext, people: records)
     }
 
     public enum ParseError: Error, LocalizedError {
@@ -152,12 +180,20 @@ public enum PeopleJSON {
         return PersonImport(name: name, context: nonEmpty(dict["context"] as? String))
     }
 
+    /// The "me" entry is liberal too: an object with a context, or a bare
+    /// context string. Its name is informational (who "me" is, for agents).
+    private static func meContext(from raw: Any?) -> String? {
+        if let s = raw as? String { return nonEmpty(s) }
+        if let dict = raw as? [String: Any] { return nonEmpty(dict["context"] as? String) }
+        return nil
+    }
+
     private static func nonEmpty(_ s: String?) -> String? {
         guard let t = s?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
         return t
     }
 
-    private static func envelope(people: [PersonImport], instructions: String?) throws -> Data {
+    private static func envelope(people: [PersonImport], me: PersonImport?, instructions: String?) throws -> Data {
         var root: [String: Any] = [
             "kind": "luxicon-people",
             "schemaVersion": 1,
@@ -167,6 +203,11 @@ public enum PeopleJSON {
                 return obj
             },
         ]
+        if let me {
+            var obj: [String: Any] = ["name": me.name]
+            if let context = me.context { obj["context"] = context }
+            root["me"] = obj
+        }
         if let instructions { root["instructions"] = instructions }
         return try JSONSerialization.data(
             withJSONObject: root, options: [.prettyPrinted, .sortedKeys])

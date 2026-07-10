@@ -1,6 +1,6 @@
 # Luxicon privacy policy
 
-*Effective 2026-07-09.*
+*Effective 2026-07-10.*
 
 Luxicon is built so that your conversations stay yours.
 
@@ -27,9 +27,13 @@ by Apple; end-to-end encrypted if you enable Advanced Data Protection).
   cross the internet.
 - **Vocabulary URL sync** (optional, off by default): if you configure a
   vocabulary URL, the app fetches that file over https when opened.
+- **People URL sync** (optional, off by default): if you configure a
+  people-roster URL, the app fetches that file over https when opened.
 
 That is the complete list. Without those optional features, Luxicon works
-in airplane mode after the model download.
+in airplane mode after the model download. (The giving screen's links —
+davidson.edu/giving and the GitHub repository — open in Safari; the app
+itself makes no request.)
 
 ## Sharing
 

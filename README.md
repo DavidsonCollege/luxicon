@@ -1,6 +1,6 @@
 # Luxicon
 
-<img src="App/Assets.xcassets/AppIcon.appiconset/AppIcon.png" width="128" align="right" alt="Luxicon app icon: a stylized waveform">
+<img src="App/Assets.xcassets/AppIcon.appiconset/AppIcon.png" width="128" align="right" alt="Luxicon app icon: a wildcat and a colleague in a 1-on-1 across a café table">
 
 **On-device 1-on-1 recorder for managers.** Record a sit-down with a direct
 report on your iPhone, get a speaker-labeled transcript that stays on your
@@ -8,6 +8,11 @@ devices, and export it as clean markdown or JSON for the AI assistant of your
 choice — performance summaries, check-in prep, longitudinal review.
 
 No cloud APIs. No per-minute pricing. No audio leaving the phone.
+
+Luxicon is a free, open-source service of
+[Davidson College](https://www.davidson.edu), built by the college's
+Technology & Innovation team. If you like what you see, consider
+[giving to Davidson](https://www.davidson.edu/giving).
 
 ## How it works
 

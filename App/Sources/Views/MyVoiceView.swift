@@ -72,6 +72,8 @@ struct MyVoiceView: View {
                 Text("Read anything aloud for ~15 seconds — a paragraph from a book works well. Luxicon stores only a voice fingerprint (256 numbers), not the audio. With your voice enrolled, 1-on-1 transcripts label you and the other person automatically.")
             }
 
+            aiSummariesSection
+
             Section {
                 NavigationLink {
                     VocabularyListView()
@@ -126,8 +128,6 @@ struct MyVoiceView: View {
             } footer: {
                 Text("Parakeet is fast and battery-friendly; vocabulary is applied as a correction pass. Qwen3 injects your vocabulary directly into the recognizer (better on unusual names) but downloads ~400 MB more and runs slower.")
             }
-
-            aiSummariesSection
 
             Section {
                 ShareLink(item: URL(string: "https://github.com/DavidsonCollege/luxicon/releases")!) {

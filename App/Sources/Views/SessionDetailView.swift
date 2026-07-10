@@ -204,6 +204,14 @@ struct TranscriptView: View {
                         Text(stage).font(.footnote).foregroundStyle(.secondary).padding(.leading, 8)
                     }
                 } else {
+                    if let error = store.processing.summarizeError[session.id] {
+                        Label {
+                            Text(error).font(.footnote).foregroundStyle(.red)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                    }
                     Button {
                         store.startSummarizing(session)
                     } label: {

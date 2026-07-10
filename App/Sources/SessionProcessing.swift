@@ -14,6 +14,10 @@ final class ProcessingState {
     var bySession: [UUID: Info] = [:]
     /// Sessions currently generating a summary (value = stage description).
     var summarizing: [UUID: String] = [:]
+    /// Why the last summary attempt failed, per session (guardrail refusals,
+    /// engine availability). Transient by design — cleared on retry, never
+    /// persisted to store.json.
+    var summarizeError: [UUID: String] = [:]
     /// Running task per session, so backgrounding can cancel cleanly.
     @ObservationIgnored var tasks: [UUID: Task<Void, Never>] = [:]
     /// Sessions cancelled by backgrounding, to auto-resume on foreground.

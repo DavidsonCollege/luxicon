@@ -407,6 +407,21 @@ final class MockChat: SummaryChat {
         #expect(result.overview.hasPrefix("**Overview**"))
     }
 
+    @Test func sectionNotesAreDebulletedBeforeMerge() async throws {
+        // The model copies "- " prefixes from embedded notes into its own
+        // bullets ("- - item"); notes enter the merge prompt as plain lines.
+        let mock = MockChat(replies: [
+            "- alpha point\n- beta point",
+            "- gamma point",
+            "HEADLINE: Topics\nSUMMARY:\n**Overview** — Done.",
+        ])
+        let summarizer = MeetingSummarizer(chat: mock, transcriptCharBudget: 350)
+        _ = try await summarizer.summarize(meeting(turns(6)))
+        let mergePrompt = mock.calls.last?.last?.content ?? ""
+        #expect(mergePrompt.contains("alpha point"))
+        #expect(!mergePrompt.contains("- alpha point"))
+    }
+
     @Test func referenceContextAppearsOnlyInMergePass() async throws {
         // Participant background is glossary for the final summary, not per
         // section: chunk prompts stay lean and can't confabulate from it.

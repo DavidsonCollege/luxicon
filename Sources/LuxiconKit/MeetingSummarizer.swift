@@ -190,8 +190,11 @@ public final class MeetingSummarizer {
                 ],
                 sampling: sampling
             )
-            // A runaway section reply must not blow the merge pass's budget.
-            notes.append(Self.clip(raw.trimmingCharacters(in: .whitespacesAndNewlines), limit: 2_000))
+            // Debullet (the merge model copies "- " prefixes into its own
+            // bullets, yielding "- - item") and clip — a runaway section
+            // reply must not blow the merge pass's budget.
+            notes.append(Self.clip(
+                Self.debullet(raw.trimmingCharacters(in: .whitespacesAndNewlines)), limit: 2_000))
         }
         var merge = ChatSamplingConfig.default
         merge.temperature = 0.3
@@ -387,6 +390,20 @@ public final class MeetingSummarizer {
         return chunks
     }
 
+    /// Strip leading list markers from note lines: the merge model copies
+    /// them into its own bullets otherwise, rendering "- - item".
+    static func debullet(_ note: String) -> String {
+        note.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line in
+                let trimmed = line.drop(while: { $0 == " " })
+                if trimmed.hasPrefix("- ") || trimmed.hasPrefix("• ") {
+                    return String(trimmed.dropFirst(2))
+                }
+                return String(line)
+            }
+            .joined(separator: "\n")
+    }
+
     static let sectionNotesSystemPrompt = """
     You take notes on one section of a workplace 1-on-1 meeting transcript. \
     Work only from the transcript section: be factual and specific, use only \
@@ -415,7 +432,8 @@ public final class MeetingSummarizer {
             + metadataBlock(for: transcript)
             + "\n\nThe meeting was too long for one pass, so it was reviewed in "
             + "\(notes.count) consecutive sections. The notes below, in order, are "
-            + "the record of the conversation — summarize them as one meeting:\n\n"
+            + "the record of the conversation — summarize them as one meeting, "
+            + "rewriting the content in your own words:\n\n"
             + notes.enumerated()
                 .map { "Section \($0.offset + 1) notes:\n\($0.element)" }
                 .joined(separator: "\n\n")

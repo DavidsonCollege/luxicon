@@ -63,7 +63,7 @@ import Foundation
         #expect(prompt.contains("Josh (49% talk time)"))
     }
 
-    @Test func promptIncludesParticipantBackground() {
+    @Test func promptIncludesParticipantBackgroundAsReference() {
         let transcript = MeetingTranscript(
             title: "Weekly 1:1", date: Date(timeIntervalSince1970: 1_780_000_000),
             duration: 60,
@@ -73,10 +73,28 @@ import Foundation
             SummaryParticipant(name: "Josh", context: "Senior sysadmin; runs identity platform"),
             SummaryParticipant(name: "JD", context: "   "),
         ])
-        #expect(prompt.contains("Participant background"))
+        #expect(prompt.contains("Reference"))
         #expect(prompt.contains("- Josh: \"Senior sysadmin; runs identity platform\""))
         // Blank context rows are dropped entirely, not emitted as empty lines.
         #expect(!prompt.contains("- JD:"))
+    }
+
+    @Test func referencePrecedesTranscriptSoItReadsAsGlossaryNotContent() {
+        // Glossary-first, transcript-last: the transcript is the last thing the
+        // model reads and the only thing it's told to summarize.
+        let transcript = MeetingTranscript(
+            title: "Weekly 1:1", date: Date(timeIntervalSince1970: 1_780_000_000),
+            duration: 60,
+            turns: [TranscriptTurn(id: 0, speakerId: 0, speakerName: "Josh", start: 0, end: 30, text: "Hi.")]
+        )
+        let prompt = MeetingSummarizer.userPrompt(for: transcript, context: [
+            SummaryParticipant(name: "Josh", context: "Senior sysadmin"),
+        ])
+        let ref = prompt.range(of: "Reference")
+        let body = prompt.range(of: "Transcript:")
+        #expect(ref != nil && body != nil)
+        #expect(ref!.lowerBound < body!.lowerBound)
+        #expect(prompt.contains("Summarize only the conversation"))
     }
 
     @Test func contextIsClippedInPrompt() {
@@ -116,13 +134,13 @@ import Foundation
             duration: 60,
             turns: [TranscriptTurn(id: 0, speakerId: 0, speakerName: "Josh", start: 0, end: 30, text: "Hi.")]
         )
-        #expect(!MeetingSummarizer.userPrompt(for: transcript).contains("Participant background"))
+        #expect(!MeetingSummarizer.userPrompt(for: transcript).contains("Reference"))
     }
 
     @Test func systemPromptForbidsReproducingBackground() {
         // Background is meant to add nuance, not become summary content. The
         // model must be told to interpret with it, never to report it.
-        #expect(MeetingSummarizer.systemPrompt.contains("never repeat it as if it were discussed"))
+        #expect(MeetingSummarizer.systemPrompt.contains("never present it as something that was said"))
         // The empty-transcript case is handled in code, not the prompt: the
         // system prompt must NOT carry an inline HEADLINE/SUMMARY template the
         // model copies verbatim (that leaked "SUMMARY:" into the list label
@@ -158,6 +176,38 @@ import Foundation
                                    text: "Stack Map Inc. is the category leader in stack mapping.")]
         )
         #expect(!MeetingSummarizer.isEmpty(monologue))
+    }
+
+    @Test func thinTranscriptShortCircuitsWithoutTheModel() {
+        // A mic test / accidental recording has words but no substance. The
+        // model would only produce noise, so it short-circuits like empty.
+        let micTest = MeetingTranscript(
+            title: "Weekly 1:1", date: Date(timeIntervalSince1970: 1_780_000_000),
+            duration: 23,
+            turns: [
+                TranscriptTurn(id: 0, speakerId: 0, speakerName: "JD", start: 8, end: 10,
+                               text: "Check one two, check one two."),
+                TranscriptTurn(id: 1, speakerId: 0, speakerName: "JD", start: 10, end: 14,
+                               text: "Yeah, I was a cow in my land. With the little roadways on it."),
+            ]
+        )
+        #expect(MeetingSummarizer.isTooThin(micTest))
+        #expect(MeetingSummarizer.thinResult.headline == "Too short to summarize")
+        #expect(!MeetingSummarizer.thinResult.overview.isEmpty)
+    }
+
+    @Test func substantialTranscriptIsNotTooThin() {
+        // A real vendor-eval monologue is well above the threshold.
+        let stackMap = MeetingTranscript(
+            title: "Weekly 1:1", date: Date(timeIntervalSince1970: 1_780_000_000),
+            duration: 68,
+            turns: [TranscriptTurn(id: 0, speakerId: 0, speakerName: "JD", start: 0, end: 60,
+                text: "Stack Map Inc. is the established category leader in library stack "
+                    + "mapping, an eighteen year old bootstrap company running at hundreds of "
+                    + "libraries including Syracuse and Stanford, with public internal data "
+                    + "only, no patron identity, at ninety five dollars a year.")]
+        )
+        #expect(!MeetingSummarizer.isTooThin(stackMap))
     }
 
     @Test func headlineNeverLeaksSummaryMarker() {

@@ -22,6 +22,7 @@ struct LuxiconCLI {
             print("""
             usage: luxicon-cli <audio-file> [options]
                    luxicon-cli push <file.json> --token <pairing token>
+                   luxicon-cli summarize <transcript.json> [--context "Name=text"] [--context-file "Name=path"]
               --enroll Name=voice.wav   enroll a known voice (repeatable)
               --out <dir>               write transcript.md + transcript.json here
               --title <title>           meeting title (default: file name)
@@ -29,6 +30,67 @@ struct LuxiconCLI {
               --vocab-file terms.json   vocabulary JSON ({"terms":[{"term":...,"soundsLike":[...]}]})
               --engine parakeet|qwen3   ASR engine (qwen3 supports --vocab context injection)
             """)
+            return
+        }
+
+        // Subcommand: run the on-device summarizer over an exported transcript
+        // JSON (or a raw MeetingTranscript) with optional participant context.
+        // Verifies real model output on the Mac without round-tripping a phone.
+        //   luxicon-cli summarize <transcript.json> [--context "Name=text"]
+        //                                           [--context-file "Name=path"]
+        if args[0] == "summarize" {
+            guard args.count >= 2 else {
+                throw ValidationError("usage: luxicon-cli summarize <transcript.json> "
+                    + "[--context \"Name=text\" ...] [--context-file \"Name=path\" ...]")
+            }
+            let data = try Data(contentsOf: URL(fileURLWithPath: args[1]))
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            struct Envelope: Decodable { let transcript: MeetingTranscript }
+            let transcript: MeetingTranscript
+            if let env = try? decoder.decode(Envelope.self, from: data) {
+                transcript = env.transcript
+            } else {
+                transcript = try decoder.decode(MeetingTranscript.self, from: data)
+            }
+
+            func nameEq(_ spec: String) throws -> (String, String) {
+                guard let eq = spec.firstIndex(of: "=") else {
+                    throw ValidationError("expected Name=value, got '\(spec)'")
+                }
+                return (String(spec[..<eq]), String(spec[spec.index(after: eq)...]))
+            }
+            var context: [SummaryParticipant] = []
+            var j = 2
+            while j < args.count {
+                guard args.indices.contains(j + 1) else {
+                    throw ValidationError("\(args[j]) expects a value")
+                }
+                switch args[j] {
+                case "--context":
+                    let (n, c) = try nameEq(args[j + 1])
+                    context.append(SummaryParticipant(name: n, context: c))
+                case "--context-file":
+                    let (n, p) = try nameEq(args[j + 1])
+                    let text = try String(contentsOf: URL(fileURLWithPath: p), encoding: .utf8)
+                    context.append(SummaryParticipant(name: n, context: text))
+                default: throw ValidationError("unknown option \(args[j])")
+                }
+                j += 2
+            }
+
+            print("Loading summarizer model (downloads ~404 MB on first run)…")
+            let summarizer = try await MeetingSummarizer.load { p, stage in
+                print(String(format: "  [%3.0f%%] %@", p * 100, stage))
+            }
+            let isEmpty = MeetingSummarizer.isEmpty(transcript)
+            print("Transcript: \(transcript.turns.count) turns, "
+                + "empty=\(isEmpty), context=\(context.count) participant(s)\n")
+            let result = try summarizer.summarize(transcript, context: context)
+            print("=== LIST LABEL (\(result.headline.count) chars) ===")
+            print(result.headline)
+            print("\n=== OVERVIEW ===")
+            print(result.overview)
             return
         }
 

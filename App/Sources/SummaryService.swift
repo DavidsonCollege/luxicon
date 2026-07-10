@@ -46,10 +46,12 @@ extension Store {
         let sessionId = session.id
         processing.summarizing[sessionId] = "Preparing…"
 
-        var context = [SummaryParticipant(name: myName, context: myContext)]
-        if let person = person(id: session.personId) {
-            context.append(SummaryParticipant(name: person.name, context: person.context ?? ""))
-        }
+        // Participant context is deliberately NOT fed to the summarizer: the
+        // on-device model confabulates the summary from prose background rather
+        // than grounding in the transcript (verified with luxicon-cli
+        // summarize). The context/glossary plumbing in LuxiconKit is kept for a
+        // future, more capable model. Summaries are transcript-only for now.
+        let context: [SummaryParticipant] = []
 
         let task = Task {
             do {

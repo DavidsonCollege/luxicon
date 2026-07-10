@@ -233,7 +233,7 @@ struct PeopleListView: View {
             showingAboutGiving = true
         } label: {
             VStack(spacing: 2) {
-                Image("AppIconLarge")
+                Image(decorative: "AppIconLarge")
                     .resizable()
                     .frame(width: 34, height: 34)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))

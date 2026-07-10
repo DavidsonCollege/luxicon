@@ -23,32 +23,34 @@ struct AboutGivingView: View {
             }
             .padding(.top, 16)
 
-            Spacer()
+            ScrollView {
+                VStack(spacing: 0) {
+                    Image(decorative: "AppIconLarge")
+                        .resizable()
+                        .frame(width: 116, height: 116)
+                        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                        .shadow(color: Color("DavidsonRed").opacity(0.35), radius: 14, y: 8)
 
-            Image("AppIconLarge")
-                .resizable()
-                .frame(width: 116, height: 116)
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .shadow(color: Color("DavidsonRed").opacity(0.35), radius: 14, y: 8)
+                    Text("Luxicon")
+                        .font(.title2.bold())
+                        .padding(.top, 16)
+                    Text("A service of Davidson College")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color("DavidsonRed"))
+                        .padding(.top, 2)
 
-            Text("Luxicon")
-                .font(.title2.bold())
-                .padding(.top, 16)
-            Text("A service of Davidson College")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color("DavidsonRed"))
-                .padding(.top, 2)
-
-            VStack(spacing: 12) {
-                Text("Luxicon is free and open source, built by Davidson College Technology & Innovation. Everything — recording, transcription, summaries — stays on your device.")
-                Text("If you like what you see, consider a gift to Davidson. Giving sustains the college's primary purpose: *developing humane instincts and disciplined and creative minds for lives of leadership and service.*")
+                    VStack(spacing: 12) {
+                        Text("Luxicon is free and open source, built by Davidson College Technology & Innovation. Everything — recording, transcription, summaries — stays on your device.")
+                        Text("If you like what you see, consider a gift to Davidson. Giving sustains the college's primary purpose: *developing humane instincts and disciplined and creative minds for lives of leadership and service.*")
+                    }
+                    .font(.callout)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 20)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
             }
-            .font(.callout)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(.secondary)
-            .padding(.top, 20)
-
-            Spacer()
 
             Button {
                 openURL(URL(string: "https://www.davidson.edu/giving")!)
@@ -60,6 +62,7 @@ struct AboutGivingView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(Color("DavidsonRed"))
+            .accessibilityHint("Opens davidson.edu/giving in Safari")
 
             Text("Opens davidson.edu/giving in Safari")
                 .font(.caption2)

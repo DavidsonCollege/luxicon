@@ -158,7 +158,7 @@ struct MyVoiceView: View {
                     showingAboutGiving = true
                 } label: {
                     HStack(spacing: 12) {
-                        Image("AppIconLarge")
+                        Image(decorative: "AppIconLarge")
                             .resizable()
                             .frame(width: 30, height: 30)
                             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))

@@ -138,6 +138,28 @@ record.
 
 ## TestFlight — What to Test (per-build notes, 4000 chars max)
 
+### Build 7
+
+New since build 6 — please exercise the new "off the record" control:
+
+(1) Off the record basics: while recording, tap "Go off the record" (below Stop
+& Transcribe). The screen switches to a dark "This stays between you and
+<name>" state, the system microphone indicator (the orange dot) turns off, and
+the timer freezes. Tap "Resume recording" to continue. Anything said while off
+the record must NOT appear in the final transcript, and the elapsed time must
+pick up where it left off (the off-the-record stretch isn't counted). Try going
+off the record more than once in one session.
+(2) Off the record vs. interruptions: go off the record, then take a phone call
+or trigger Siri. When the call ends, recording must STAY paused — it must not
+silently resume on its own. Only the Resume button brings it back.
+(3) Lock screen / Live Activity: with a recording off the record, check that the
+Lock Screen and Dynamic Island show the paused "Off the record" state instead of
+a running timer, and that on resume the timer reflects real recording time (it
+does not jump forward by the length of the off-the-record gap).
+(4) Save/discard around it: after an off-the-record stretch, Stop & Transcribe
+and Discard should both behave normally, and the transcript should contain the
+on-the-record audio from before and after the gap.
+
 ### Build 6
 
 New since build 5 — please exercise:

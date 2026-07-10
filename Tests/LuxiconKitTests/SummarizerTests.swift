@@ -40,12 +40,12 @@ final class MockChat: SummaryChat {
         )
     }
 
-    @Test func summarizeRunsOverAnyBackend() throws {
+    @Test func summarizeRunsOverAnyBackend() async throws {
         // The summarizer must work over the SummaryChat protocol, not a
         // concrete model class — Qwen and Gemma backends are interchangeable.
         let mock = MockChat(replies: ["HEADLINE: Budget, hiring\nSUMMARY:\n**Overview** — Discussed budget."])
         let summarizer = MeetingSummarizer(chat: mock)
-        let result = try summarizer.summarize(transcript(
+        let result = try await summarizer.summarize(transcript(
             "We went through the budget line by line and agreed to post the two "
             + "open positions before the fall hiring push begins next month, and "
             + "we also reviewed the storage migration timeline, the phishing "
@@ -56,13 +56,13 @@ final class MockChat: SummaryChat {
         #expect(mock.calls[0].first?.role == .system)
     }
 
-    @Test func emptyAndThinGatesNeverCallTheBackend() throws {
+    @Test func emptyAndThinGatesNeverCallTheBackend() async throws {
         let mock = MockChat(replies: [])
         let summarizer = MeetingSummarizer(chat: mock)
         let empty = MeetingTranscript(
             title: "t", date: Date(timeIntervalSince1970: 1_780_000_000), duration: 0, turns: [])
-        #expect(try summarizer.summarize(empty).headline == "No conversation recorded")
-        #expect(try summarizer.summarize(transcript("Check one two.")).headline == "Too short to summarize")
+        #expect(try await summarizer.summarize(empty).headline == "No conversation recorded")
+        #expect(try await summarizer.summarize(transcript("Check one two.")).headline == "Too short to summarize")
         #expect(mock.calls.isEmpty)
     }
 }

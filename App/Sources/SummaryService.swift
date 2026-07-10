@@ -45,7 +45,7 @@ actor SummaryService {
         try await loadModel(progress: progress)
         progress("Summarizing…")
         try Task.checkCancellation()
-        let result = try summarizer!.summarize(transcript, context: context)
+        let result = try await summarizer!.summarize(transcript, context: context)
         return (
             listLabel: result.headline,
             summary: SessionSummary(overview: result.overview, generatedAt: Date())

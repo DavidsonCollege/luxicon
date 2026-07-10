@@ -103,11 +103,11 @@ struct LuxiconCLI {
             let isEmpty = MeetingSummarizer.isEmpty(transcript)
             print("Transcript: \(transcript.turns.count) turns, "
                 + "empty=\(isEmpty), context=\(context.count) participant(s)\n")
-            let result = try summarizer.summarize(transcript, context: context)
+            let result = try await summarizer.summarize(transcript, context: context)
             print("=== LIST LABEL (\(result.headline.count) chars) ===")
             print(result.headline)
             if secondPass {
-                let refined = try summarizer.refineLabel(
+                let refined = try await summarizer.refineLabel(
                     headline: result.headline, overview: result.overview)
                 print("\n=== REFINED LABEL (\(refined.count) chars) ===")
                 print(refined)

@@ -4,9 +4,11 @@ import Qwen3Chat
 
 /// A buffered chat completion backend. Both on-device LLM families in
 /// speech-swift (`Qwen35MLXChat`, `Gemma4Chat`) already share this exact
-/// method shape, so the summarizer stays model-agnostic.
+/// method shape, so the summarizer stays model-agnostic. Async so a
+/// framework-owned backend (Apple Intelligence) can conform; the MLX
+/// backends satisfy it with their synchronous method.
 public protocol SummaryChat {
-    func generate(messages: [ChatMessage], sampling: ChatSamplingConfig) throws -> String
+    func generate(messages: [ChatMessage], sampling: ChatSamplingConfig) async throws -> String
 }
 
 extension Qwen35MLXChat: SummaryChat {}
@@ -98,7 +100,7 @@ public final class MeetingSummarizer {
     public func summarize(
         _ transcript: MeetingTranscript,
         context: [SummaryParticipant] = []
-    ) throws -> (headline: String, overview: String) {
+    ) async throws -> (headline: String, overview: String) {
         // Empty or too-thin transcripts never reach the model: it can't
         // summarize nothing, and asking it to only invites noise or fabricated
         // content. Decided in code, not prompt.
@@ -107,7 +109,7 @@ public final class MeetingSummarizer {
         var sampling = ChatSamplingConfig.default
         sampling.temperature = 0.3
         sampling.maxTokens = 700
-        let raw = try chat.generate(
+        let raw = try await chat.generate(
             messages: [
                 ChatMessage(role: .system, content: Self.systemPrompt),
                 ChatMessage(role: .user, content: Self.userPrompt(for: transcript, context: context)),
@@ -121,14 +123,14 @@ public final class MeetingSummarizer {
     /// notification-style label the conversations list needs. A small model
     /// follows one focused rewrite instruction far better than a format clause
     /// buried in the main summarization prompt.
-    public func refineLabel(headline: String, overview: String) throws -> String {
+    public func refineLabel(headline: String, overview: String) async throws -> String {
         var sampling = ChatSamplingConfig.default
         sampling.temperature = 0.0
         // Generous budget: the pipeline may spend tokens on a stripped
         // <think> block before the visible label; too small a cap yields an
         // empty answer (and a silent fallback to the unrefined headline).
         sampling.maxTokens = 256
-        let raw = try chat.generate(
+        let raw = try await chat.generate(
             messages: [
                 ChatMessage(role: .system, content: Self.labelRefinePrompt),
                 ChatMessage(role: .user, content: "\(headline)\n\n\(overview)"),

@@ -126,6 +126,9 @@ struct MyVoiceView: View {
             }
 
             Section {
+                ShareLink(item: URL(string: "https://github.com/DavidsonCollege/luxicon/releases")!) {
+                    Label("Send installer link to your Mac", systemImage: "square.and.arrow.up")
+                }
                 TextField("Pairing token from `luxicon-mcp listen`", text: $store.syncToken)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
@@ -142,7 +145,7 @@ struct MyVoiceView: View {
             } header: {
                 Text("Mac sync")
             } footer: {
-                Text("Send transcripts and summaries to a Mac running `luxicon-mcp listen`, so you can query them from Claude. Everything stays on your local network. Enter the Mac's address if it isn't found automatically (common on enterprise Wi-Fi that blocks discovery).")
+                Text("Send transcripts and summaries to a Mac running `luxicon-mcp listen`, so you can query them from Claude. Everything stays on your local network. Use “Send installer link to your Mac” to AirDrop the listener installer over, then enter the Mac's address if it isn't found automatically (common on enterprise Wi-Fi that blocks discovery).")
             }
 
             if let errorMessage {

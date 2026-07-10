@@ -29,18 +29,28 @@ struct MyVoiceView: View {
                         .onSubmit { store.save() }
                 }
                 if store.aiSummariesEnabled {
-                    // With people sync on, the synced file's "me" entry owns
-                    // this context, so it's read-only here.
-                    if store.peopleSyncConfigured {
-                        if store.myContext.isEmpty {
-                            Text("About you comes from the synced people file — add a “me” entry there.")
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text(store.myContext)
-                        }
-                    } else {
-                        TextField("About you — role, team, current focus", text: $store.myContext, axis: .vertical)
-                            .lineLimit(2...6)
+                    // Height-capped preview; the full text (and editing, when
+                    // people sync doesn't own it) lives on the pushed screen.
+                    NavigationLink {
+                        ContextDetailView(
+                            title: "About You",
+                            text: $store.myContext,
+                            syncedExplanation: store.peopleSyncConfigured
+                                ? "People sync is on: this text comes from the synced file's “me” entry and can't be edited here — edit the file instead."
+                                : nil,
+                            editingExplanation: "Background the summarizer uses to interpret your 1-on-1s — your role, team, and current focus.",
+                            emptyPrompt: store.peopleSyncConfigured
+                                ? "No “me” entry in the synced people file yet — add one there."
+                                : "About you — role, team, current focus",
+                            onSave: { store.save() }
+                        )
+                    } label: {
+                        ContextPreviewRow(
+                            text: store.myContext,
+                            emptyPrompt: store.peopleSyncConfigured
+                                ? "About you — from the synced people file"
+                                : "About you — role, team, current focus"
+                        )
                     }
                 }
             }

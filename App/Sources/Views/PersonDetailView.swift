@@ -48,28 +48,36 @@ struct PersonDetailView: View {
             }
 
             // Personal context is part of the opt-in AI summaries feature
-            // (My Voice → AI summaries); hidden while it's off. With people
-            // sync on, the synced file owns context, so it's read-only here.
+            // (My Voice → AI summaries); hidden while it's off. The row is a
+            // height-capped preview; the full text (and editing, when people
+            // sync doesn't own it) lives on the pushed screen.
             if store.aiSummariesEnabled {
                 Section {
-                    if store.peopleSyncConfigured {
-                        if let context = store.person(id: person.id)?.context {
-                            Text(context)
-                        } else {
-                            Text("No context yet — add \(person.name) to the synced people file.")
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        TextField("Role, projects, current threads…",
-                                  text: contextBinding, axis: .vertical)
-                            .lineLimit(2...6)
+                    NavigationLink {
+                        ContextDetailView(
+                            title: "Context",
+                            text: contextBinding,
+                            syncedExplanation: store.peopleSyncConfigured
+                                ? "People sync is on: \(person.name)'s context comes from the synced file and can't be edited here — edit the file instead."
+                                : nil,
+                            editingExplanation: "Background the summarizer uses to interpret your 1-on-1s — e.g. “Senior sysadmin; runs the identity platform; discussing promotion this quarter.” Stays on this device unless you configure people sync — then the synced file's context wins.",
+                            emptyPrompt: store.peopleSyncConfigured
+                                ? "No context yet — add \(person.name) to the synced people file."
+                                : "Role, projects, current threads…",
+                            onSave: { store.save() }
+                        )
+                    } label: {
+                        ContextPreviewRow(
+                            text: store.person(id: person.id)?.context ?? "",
+                            emptyPrompt: store.peopleSyncConfigured
+                                ? "No context yet — add \(person.name) to the synced people file."
+                                : "Role, projects, current threads…"
+                        )
                     }
                 } header: {
                     Text("Context")
                 } footer: {
-                    Text(store.peopleSyncConfigured
-                        ? "Background the summarizer uses to interpret your 1-on-1s. People sync is on, so context comes from the synced file — edit it there."
-                        : "Background the summarizer uses to interpret your 1-on-1s — e.g. “Senior sysadmin; runs the identity platform; discussing promotion this quarter.” Stays on this device unless you configure people sync — then the synced file's context wins.")
+                    Text("Background the summarizer uses to interpret your 1-on-1s.")
                 }
             }
 

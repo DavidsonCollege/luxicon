@@ -138,6 +138,27 @@ record.
 
 ## TestFlight — What to Test (per-build notes, 4000 chars max)
 
+### Build 9
+
+New since build 8 — summaries are grounded in the transcript, plus a one-line
+label in the sessions list:
+
+(1) Session labels: in a person's Sessions list, each summarized session now
+shows a short one-line topic label under the date. Generate (or regenerate) a
+summary and confirm the label appears, fits on one line, and describes the
+topics — with no "SUMMARY:" text or markdown leaking into it.
+(2) Grounded summaries: the summary must reflect only what was actually said.
+If you have background context set for yourself or the other person (Context
+field on their page), confirm the summary does NOT repeat that background as if
+it were discussed — record a short session about an unrelated topic and check
+the summary sticks to it.
+(3) Empty and short recordings: a recording with no speech should show "No
+conversation recorded"; a very short one (a few sentences, like a mic test)
+should show "Too short to summarize" — both immediately, without running the
+summarizer model.
+(4) Existing sessions keep their old summary/label until you tap Regenerate
+Summary — regenerate one old session and confirm the label updates.
+
 ### Build 8
 
 New since build 7 — a quick way to get the Mac listener onto your Mac:

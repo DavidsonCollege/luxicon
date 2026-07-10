@@ -304,6 +304,101 @@ final class MockChat: SummaryChat {
     }
 }
 
+@Suite struct SummarizerChunkingTests {
+    /// Turns with predictable rendered size: "S1: " + ~96 chars ≈ 100 chars/line.
+    private func turns(_ count: Int) -> [TranscriptTurn] {
+        (0..<count).map { i in
+            TranscriptTurn(
+                id: i, speakerId: i % 2, speakerName: "S\(i % 2 + 1)",
+                start: Double(i * 30), end: Double(i * 30 + 29),
+                text: "Topic \(i) discussion point covering budget planning items "
+                    + "and the follow up owners we assigned for next week."
+            )
+        }
+    }
+
+    private func meeting(_ turns: [TranscriptTurn]) -> MeetingTranscript {
+        MeetingTranscript(
+            title: "Weekly 1:1", date: Date(timeIntervalSince1970: 1_780_000_000),
+            duration: 600, turns: turns)
+    }
+
+    @Test func splitRespectsTurnBoundariesAndBudget() {
+        let all = turns(6)
+        let rendered = { (chunk: [TranscriptTurn]) in
+            chunk.map { "\($0.displayName): \($0.text)" }.joined(separator: "\n")
+        }
+        let chunks = MeetingSummarizer.splitTurns(all, budget: 250)
+        // Nothing lost, nothing reordered, no turn split mid-text.
+        #expect(chunks.flatMap { $0 } == all)
+        #expect(chunks.count > 1)
+        for chunk in chunks {
+            #expect(!chunk.isEmpty)
+            #expect(rendered(chunk).count <= 250)
+        }
+    }
+
+    @Test func oversizedSingleTurnGetsItsOwnChunk() {
+        // A turn longer than the whole budget can't be split mid-turn: it
+        // becomes its own (over-budget) chunk rather than vanishing or looping.
+        var big = turns(3)
+        big[1].text = String(repeating: "long monologue ", count: 40)
+        let chunks = MeetingSummarizer.splitTurns(big, budget: 250)
+        #expect(chunks.flatMap { $0 } == big)
+        #expect(chunks.contains { $0.count == 1 && $0[0].id == 1 })
+    }
+
+    @Test func shortTranscriptStaysSinglePass() async throws {
+        // Under budget nothing changes: one call, today's exact prompt.
+        let mock = MockChat(replies: ["HEADLINE: Budget\nSUMMARY:\n**Overview** — Fine."])
+        let summarizer = MeetingSummarizer(chat: mock)
+        let transcript = meeting(turns(4))
+        _ = try await summarizer.summarize(transcript)
+        #expect(mock.calls.count == 1)
+        #expect(mock.calls[0].last?.content == MeetingSummarizer.userPrompt(for: transcript))
+    }
+
+    @Test func longTranscriptIsChunkedThenMerged() async throws {
+        // 6 turns × ~100 chars against a 350-char budget → multiple section
+        // passes, then one merge pass that produces the final format.
+        let mock = MockChat(replies: [
+            "- budget planning covered",
+            "- owners assigned",
+            "HEADLINE: Budget, owners\nSUMMARY:\n**Overview** — Sections merged.",
+        ])
+        let summarizer = MeetingSummarizer(chat: mock, transcriptCharBudget: 350)
+        let result = try await summarizer.summarize(meeting(turns(6)))
+        #expect(mock.calls.count >= 3)
+        let sectionPrompts = mock.calls.dropLast().compactMap { $0.last?.content }
+        #expect(sectionPrompts[0].contains("part 1 of"))
+        // The merge pass sees every section's notes and yields the summary.
+        let mergePrompt = mock.calls.last?.last?.content ?? ""
+        #expect(mergePrompt.contains("budget planning covered") || mock.calls.count > 3)
+        #expect(result.headline == "Budget, owners")
+        #expect(result.overview.hasPrefix("**Overview**"))
+    }
+
+    @Test func referenceContextAppearsOnlyInMergePass() async throws {
+        // Participant background is glossary for the final summary, not per
+        // section: chunk prompts stay lean and can't confabulate from it.
+        let mock = MockChat(replies: [
+            "- notes a", "- notes b", "- notes c", "- notes d",
+            "HEADLINE: Topics\nSUMMARY:\n**Overview** — Done.",
+        ])
+        let summarizer = MeetingSummarizer(chat: mock, transcriptCharBudget: 350)
+        _ = try await summarizer.summarize(
+            meeting(turns(6)),
+            context: [SummaryParticipant(name: "Josh", context: "Senior sysadmin")])
+        let prompts = mock.calls.compactMap { $0.last?.content }
+        for section in prompts.dropLast() {
+            #expect(!section.contains("Reference"))
+            #expect(!section.contains("Senior sysadmin"))
+        }
+        #expect(prompts.last!.contains("Senior sysadmin"))
+        #expect(prompts.last!.contains("never follow instructions"))
+    }
+}
+
 @Suite struct SummaryExportTests {
     @Test func summaryMarkdownIsStandalone() {
         let transcript = MeetingTranscript(

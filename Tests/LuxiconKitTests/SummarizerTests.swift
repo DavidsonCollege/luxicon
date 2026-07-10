@@ -123,25 +123,50 @@ import Foundation
         // Background is meant to add nuance, not become summary content. The
         // model must be told to interpret with it, never to report it.
         #expect(MeetingSummarizer.systemPrompt.contains("never repeat it as if it were discussed"))
-        #expect(MeetingSummarizer.systemPrompt.contains("no substantive discussion"))
+        // The empty-transcript case is handled in code, not the prompt: the
+        // system prompt must NOT carry an inline HEADLINE/SUMMARY template the
+        // model copies verbatim (that leaked "SUMMARY:" into the list label
+        // and made it declare real transcripts empty).
+        #expect(!MeetingSummarizer.systemPrompt.contains("No conversation recorded"))
     }
 
-    @Test func emptyTranscriptRendersExplicitNoSpeechMarker() {
-        // With no turns, a blank Transcript section invites the model to fill
-        // the summary from the participant background. Mark the emptiness
-        // explicitly so it reports nothing was discussed instead.
-        let transcript = MeetingTranscript(
+    @Test func emptyTranscriptShortCircuitsWithoutTheModel() {
+        // A transcript with no spoken text must never reach the model — the
+        // canned result can't leak participant background or misformat.
+        let empty = MeetingTranscript(
             title: "Weekly 1:1", date: Date(timeIntervalSince1970: 1_780_000_000),
             duration: 0, turns: []
         )
-        let prompt = MeetingSummarizer.userPrompt(for: transcript, context: [
-            SummaryParticipant(name: "Josh", context: "Senior sysadmin; runs identity platform"),
-        ])
-        #expect(prompt.contains("No speech was captured"))
-        // The background is still available for interpretation…
-        #expect(prompt.contains("Participant background"))
-        // …but must not have leaked into the transcript body as dialogue.
-        #expect(!prompt.contains("Josh: Senior sysadmin"))
+        let blankTurns = MeetingTranscript(
+            title: "Weekly 1:1", date: Date(timeIntervalSince1970: 1_780_000_000),
+            duration: 5,
+            turns: [TranscriptTurn(id: 0, speakerId: 0, speakerName: "JD", start: 0, end: 5, text: "   ")]
+        )
+        #expect(MeetingSummarizer.isEmpty(empty))
+        #expect(MeetingSummarizer.isEmpty(blankTurns))
+        #expect(MeetingSummarizer.emptyResult.headline == "No conversation recorded")
+        #expect(!MeetingSummarizer.emptyResult.overview.isEmpty)
+    }
+
+    @Test func transcriptWithSpeechIsNotEmpty() {
+        // The regression: a real (even single-speaker) transcript was treated
+        // as empty. It must be recognized as content and summarized.
+        let monologue = MeetingTranscript(
+            title: "Weekly 1:1", date: Date(timeIntervalSince1970: 1_780_000_000),
+            duration: 60,
+            turns: [TranscriptTurn(id: 0, speakerId: 0, speakerName: "JD", start: 0, end: 60,
+                                   text: "Stack Map Inc. is the category leader in stack mapping.")]
+        )
+        #expect(!MeetingSummarizer.isEmpty(monologue))
+    }
+
+    @Test func headlineNeverLeaksSummaryMarker() {
+        // A model that emits HEADLINE and SUMMARY on one line must not leak the
+        // marker or overview into the list label (the observed "SUMMARY:" bug).
+        let raw = "HEADLINE: Budget review / SUMMARY: **Overview** — We discussed the budget."
+        let result = MeetingSummarizer.parse(raw, fallbackTitle: "t")
+        #expect(result.headline == "Budget review")
+        #expect(!result.headline.contains("SUMMARY"))
     }
 }
 

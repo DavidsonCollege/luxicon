@@ -37,6 +37,10 @@ public final class MeetingSummarizer {
         _ transcript: MeetingTranscript,
         context: [SummaryParticipant] = []
     ) throws -> (headline: String, overview: String) {
+        // A transcript with no spoken text never reaches the model: it can't
+        // summarize nothing, and asking it to would only invite it to fabricate
+        // content from the participant background. Decided in code, not prompt.
+        if Self.isEmpty(transcript) { return Self.emptyResult }
         var sampling = ChatSamplingConfig.default
         sampling.temperature = 0.3
         sampling.maxTokens = 700
@@ -50,16 +54,29 @@ public final class MeetingSummarizer {
         return Self.parse(raw, fallbackTitle: transcript.title)
     }
 
+    // MARK: - Empty transcripts (handled in code, never sent to the model)
+
+    /// True when no turn carries spoken text — the summarizer short-circuits
+    /// rather than prompting the model to summarize an empty conversation.
+    static func isEmpty(_ transcript: MeetingTranscript) -> Bool {
+        transcript.turns.allSatisfy {
+            $0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    /// Canned result for an empty transcript: a plain list label and overview.
+    static let emptyResult = (
+        headline: "No conversation recorded",
+        overview: "Nothing was discussed in this session."
+    )
+
     // MARK: - Prompting (static + internal for tests)
 
     static let systemPrompt = """
     You summarize workplace 1-on-1 meeting transcripts. Be factual and \
     specific; use only what the transcript says; never invent details. \
     Participant background is context to help you interpret what was said — \
-    never repeat it as if it were discussed in the meeting. If the transcript \
-    contains no substantive discussion, say so plainly (HEADLINE: No \
-    conversation recorded / SUMMARY: **Overview** — Nothing was discussed in \
-    this session.) rather than summarizing the background. \
+    never repeat it as if it were discussed in the meeting. \
     Respond in exactly this format:
 
     HEADLINE: <the gist as a glanceable notification-style line — a few topic \
@@ -82,9 +99,6 @@ public final class MeetingSummarizer {
         let lines = transcript.turns
             .map { "\($0.displayName): \($0.text)" }
             .joined(separator: "\n")
-        // An empty transcript body reads as license to summarize the
-        // participant background instead; mark the emptiness explicitly.
-        let body = clip(lines).trimmingCharacters(in: .whitespacesAndNewlines)
         var prompt = """
         Meeting: \(transcript.title)
         Date: \(transcript.date.formatted(date: .long, time: .shortened))
@@ -92,7 +106,7 @@ public final class MeetingSummarizer {
         Participants: \(participants)
 
         Transcript:
-        \(body.isEmpty ? "[No speech was captured in this session.]" : body)
+        \(clip(lines))
         """
         // Context is remote-controllable (people URL sync): clip each entry so
         // a runaway file can't blow the prefill budget, and fence it as
@@ -127,9 +141,15 @@ public final class MeetingSummarizer {
 
         if let headlineRange = trimmed.range(of: "HEADLINE:") {
             let afterHeadline = trimmed[headlineRange.upperBound...]
-            let headlineLine = afterHeadline
-                .prefix(while: { $0 != "\n" })
-                .trimmingCharacters(in: .whitespaces)
+            var headlineLine = String(afterHeadline.prefix(while: { $0 != "\n" }))
+            // Defense in depth: if the model runs HEADLINE and SUMMARY together
+            // on one line, cut the label at the SUMMARY marker so it can't leak
+            // the marker or overview text into the conversations-list label.
+            if let markerRange = headlineLine.range(of: "SUMMARY:") {
+                headlineLine = String(headlineLine[..<markerRange.lowerBound])
+            }
+            headlineLine = headlineLine.trimmingCharacters(
+                in: CharacterSet(charactersIn: " \t/-—"))
             if !headlineLine.isEmpty { headline = headlineLine }
             if let summaryRange = trimmed.range(of: "SUMMARY:") {
                 overview = trimmed[summaryRange.upperBound...]

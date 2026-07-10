@@ -41,6 +41,11 @@ final class Recorder: @unchecked Sendable {
     private(set) var isRecording = false
     /// True while another audio session (phone call, Siri) holds the mic.
     private(set) var isInterrupted = false
+    /// True while the user is "off the record". Capture is fully stopped and,
+    /// unlike `isInterrupted`, it NEVER auto-resumes — only `resume()` restarts
+    /// it. Confined to the main thread (set by `pause`/`resume`, read by the UI),
+    /// like `isInterrupted`.
+    private(set) var isPaused = false
 
     /// Called on the audio thread with each converted 16 kHz chunk
     /// (e.g. to feed live transcription). Set before `start`.
@@ -127,6 +132,39 @@ final class Recorder: @unchecked Sendable {
         return buffer
     }
 
+    /// User-initiated "off the record": stop capturing entirely until `resume()`.
+    /// Tears down the tap and stops the engine (so `consume` can't run — no
+    /// samples are written, tallied, or fed to `onSamples`) and deactivates the
+    /// audio session so the system microphone indicator turns off. Idempotent.
+    func pause() {
+        guard isRecording, !isPaused else { return }
+        isPaused = true
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        level = 0
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
+    }
+
+    /// Return from "off the record" and start capturing again, rewiring the tap
+    /// with the current input format (the same recovery path interruptions use).
+    func resume() {
+        guard isRecording, isPaused else { return }
+        isPaused = false
+        isInterrupted = false
+        do {
+            #if os(iOS)
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.record, mode: .default)
+            try session.setActive(true)
+            #endif
+            try startEngine()
+        } catch {
+            setRuntimeError("Couldn't resume recording: \(error.localizedDescription). Stop to save what was captured.")
+        }
+    }
+
     // MARK: - Engine lifecycle
 
     /// (Re)wire the tap and start the engine. Reads the CURRENT input format,
@@ -149,7 +187,9 @@ final class Recorder: @unchecked Sendable {
     }
 
     private func resumeCapture() {
-        guard isRecording, !engine.isRunning else { return }
+        // `!isPaused`: a phone call ending or a route change during an off-record
+        // span must NOT silently restart capture — only the user's resume() does.
+        guard isRecording, !isPaused, !engine.isRunning else { return }
         do {
             #if os(iOS)
             try AVAudioSession.sharedInstance().setActive(true)

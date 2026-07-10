@@ -10,19 +10,24 @@ struct PeopleListView: View {
     @State private var peopleFileURL: URL?
     @State private var importingPeople = false
     @State private var importResult: String?
+    @State private var showingAboutGiving = false
 
     var body: some View {
         @Bindable var coordinator = NavigationCoordinator.shared
         NavigationStack(path: $path) {
             Group {
                 if store.people.isEmpty {
-                    ContentUnavailableView {
-                        Label("No people yet", systemImage: "person.2")
-                    } description: {
-                        Text("Add the people you hold 1-on-1s with. Everything is recorded, transcribed, and stored on this device only.")
-                    } actions: {
-                        Button("Add Person") { showingAddPerson = true }
-                            .buttonStyle(.borderedProminent)
+                    VStack {
+                        ContentUnavailableView {
+                            Label("No people yet", systemImage: "person.2")
+                        } description: {
+                            Text("Add the people you hold 1-on-1s with. Everything is recorded, transcribed, and stored on this device only.")
+                        } actions: {
+                            Button("Add Person") { showingAddPerson = true }
+                                .buttonStyle(.borderedProminent)
+                        }
+                        davidsonCredit
+                            .padding(.bottom, 32)
                     }
                 } else {
                     List {
@@ -57,6 +62,12 @@ struct PeopleListView: View {
                         }
                         .onDelete { indexSet in
                             for i in indexSet { store.deletePerson(store.people[i]) }
+                        }
+                        Section {
+                            davidsonCredit
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .padding(.top, 8)
                         }
                     }
                 }
@@ -163,6 +174,9 @@ struct PeopleListView: View {
                 }
                 .presentationDetents([.medium])
             }
+            .sheet(isPresented: $showingAboutGiving) {
+                AboutGivingView()
+            }
             .onOpenURL { coordinator.handle(url: $0) }
         }
     }
@@ -209,6 +223,31 @@ struct PeopleListView: View {
             break
         }
         #endif
+    }
+
+    /// Credit line that opens the giving screen — shown at the bottom of the
+    /// roster and under the empty state, so the Davidson framing is on the
+    /// home screen in both cases.
+    private var davidsonCredit: some View {
+        Button {
+            showingAboutGiving = true
+        } label: {
+            VStack(spacing: 2) {
+                Image("AppIconLarge")
+                    .resizable()
+                    .frame(width: 34, height: 34)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .padding(.bottom, 4)
+                Text("A free, open-source service of Davidson College")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Learn more & give ›")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color("DavidsonRed"))
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
     }
 
     /// ShareLink needs a file URL ready before the tap.

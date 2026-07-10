@@ -55,9 +55,15 @@ public final class MeetingSummarizer {
     static let systemPrompt = """
     You summarize workplace 1-on-1 meeting transcripts. Be factual and \
     specific; use only what the transcript says; never invent details. \
+    Participant background is context to help you interpret what was said — \
+    never repeat it as if it were discussed in the meeting. If the transcript \
+    contains no substantive discussion, say so plainly (HEADLINE: No \
+    conversation recorded / SUMMARY: **Overview** — Nothing was discussed in \
+    this session.) rather than summarizing the background. \
     Respond in exactly this format:
 
-    HEADLINE: <topics covered, comma-separated, under 120 characters — no people's names>
+    HEADLINE: <the gist as a glanceable notification-style line — a few topic \
+    words, under 50 characters, no full sentences and no people's names>
     SUMMARY:
     <markdown with these bolded sections, using "- " bullets, no # headings>
     **Overview** — 2-3 sentences.
@@ -76,6 +82,9 @@ public final class MeetingSummarizer {
         let lines = transcript.turns
             .map { "\($0.displayName): \($0.text)" }
             .joined(separator: "\n")
+        // An empty transcript body reads as license to summarize the
+        // participant background instead; mark the emptiness explicitly.
+        let body = clip(lines).trimmingCharacters(in: .whitespacesAndNewlines)
         var prompt = """
         Meeting: \(transcript.title)
         Date: \(transcript.date.formatted(date: .long, time: .shortened))
@@ -83,7 +92,7 @@ public final class MeetingSummarizer {
         Participants: \(participants)
 
         Transcript:
-        \(clip(lines))
+        \(body.isEmpty ? "[No speech was captured in this session.]" : body)
         """
         // Context is remote-controllable (people URL sync): clip each entry so
         // a runaway file can't blow the prefill budget, and fence it as
@@ -131,8 +140,8 @@ public final class MeetingSummarizer {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
             }
         }
-        if headline.count > 120 {
-            headline = String(headline.prefix(117)) + "…"
+        if headline.count > 50 {
+            headline = String(headline.prefix(47)) + "…"
         }
         if overview.isEmpty { overview = trimmed }
         return (headline, overview)

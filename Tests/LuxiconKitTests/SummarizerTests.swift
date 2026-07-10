@@ -23,13 +23,14 @@ import Foundation
     @Test func truncatesRunawayHeadline() {
         let long = "HEADLINE: " + String(repeating: "word ", count: 40) + "\nSUMMARY:\nBody."
         let result = MeetingSummarizer.parse(long, fallbackTitle: "t")
-        #expect(result.headline.count <= 120)
+        // Notification-style: a single glanceable line, not a sentence.
+        #expect(result.headline.count <= 50)
         #expect(result.overview == "Body.")
     }
 
     @Test func headlineInstructionAsksForTopicsWithoutNames() {
         #expect(MeetingSummarizer.systemPrompt.contains("topics"))
-        #expect(MeetingSummarizer.systemPrompt.contains("120"))
+        #expect(MeetingSummarizer.systemPrompt.contains("50"))
         #expect(MeetingSummarizer.systemPrompt.contains("no people's names"))
     }
 
@@ -116,6 +117,31 @@ import Foundation
             turns: [TranscriptTurn(id: 0, speakerId: 0, speakerName: "Josh", start: 0, end: 30, text: "Hi.")]
         )
         #expect(!MeetingSummarizer.userPrompt(for: transcript).contains("Participant background"))
+    }
+
+    @Test func systemPromptForbidsReproducingBackground() {
+        // Background is meant to add nuance, not become summary content. The
+        // model must be told to interpret with it, never to report it.
+        #expect(MeetingSummarizer.systemPrompt.contains("never repeat it as if it were discussed"))
+        #expect(MeetingSummarizer.systemPrompt.contains("no substantive discussion"))
+    }
+
+    @Test func emptyTranscriptRendersExplicitNoSpeechMarker() {
+        // With no turns, a blank Transcript section invites the model to fill
+        // the summary from the participant background. Mark the emptiness
+        // explicitly so it reports nothing was discussed instead.
+        let transcript = MeetingTranscript(
+            title: "Weekly 1:1", date: Date(timeIntervalSince1970: 1_780_000_000),
+            duration: 0, turns: []
+        )
+        let prompt = MeetingSummarizer.userPrompt(for: transcript, context: [
+            SummaryParticipant(name: "Josh", context: "Senior sysadmin; runs identity platform"),
+        ])
+        #expect(prompt.contains("No speech was captured"))
+        // The background is still available for interpretation…
+        #expect(prompt.contains("Participant background"))
+        // …but must not have leaked into the transcript body as dialogue.
+        #expect(!prompt.contains("Josh: Senior sysadmin"))
     }
 }
 

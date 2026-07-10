@@ -44,35 +44,52 @@ public final class MeetingSummarizer {
         self.transcriptCharBudget = transcriptCharBudget
     }
 
-    /// Which on-device LLM family to load.
+    /// Which summarization backend to load: an on-device MLX LLM family, or
+    /// the OS-managed Apple Intelligence model.
     public enum Backend: String, Sendable {
         case qwen35, gemma4
+        case appleIntelligence = "apple"
     }
 
     public static func defaultModelId(for backend: Backend) -> String {
         switch backend {
         case .qwen35: return Qwen35MLXChat.defaultModelId
         case .gemma4: return "aufklarer/gemma-4-E2B-it-MLX-4bit"
+        case .appleIntelligence: return "apple-intelligence"  // OS-managed; label only
         }
     }
 
     /// Where the backend's weights live on disk. The app deletes exactly this
     /// directory for "Remove Model" — it is model-specific by construction, so
-    /// ASR/diarization caches are never touched.
+    /// ASR/diarization caches are never touched. Apple Intelligence weights
+    /// are the OS's; there is nothing here the app could delete.
     public static func modelCacheDirectory(for backend: Backend) throws -> URL {
-        try HuggingFaceDownloader.getCacheDirectory(for: defaultModelId(for: backend))
+        guard backend != .appleIntelligence else { throw SummaryBackendError.noModelDirectory }
+        return try HuggingFaceDownloader.getCacheDirectory(for: defaultModelId(for: backend))
     }
 
-    /// Whether the backend's weights are already on disk (no download needed).
+    /// Whether the backend is ready to load without a download — weights on
+    /// disk for the MLX backends, OS availability for Apple Intelligence.
     public static func isModelDownloaded(_ backend: Backend) -> Bool {
-        guard let dir = try? modelCacheDirectory(for: backend) else { return false }
         switch backend {
+        case .appleIntelligence:
+            return AppleIntelligence.status == .available
         case .qwen35:
             // Qwen weights live in a quantization subdirectory (int4/).
+            guard let dir = try? modelCacheDirectory(for: backend) else { return false }
             return HuggingFaceDownloader.weightsExist(in: dir.appendingPathComponent("int4"))
         case .gemma4:
+            guard let dir = try? modelCacheDirectory(for: backend) else { return false }
             return HuggingFaceDownloader.weightsExist(in: dir)
         }
+    }
+
+    /// Per-pass transcript budget for the Apple Intelligence backend, from
+    /// the model's token window: reserve ~600 tokens for the system prompt,
+    /// metadata, and reference block plus 700 for the response, then convert
+    /// at ~3.5 chars/token (English transcripts run 4+; 3.5 keeps headroom).
+    static func appleTranscriptCharBudget(contextTokens: Int) -> Int {
+        max(4_000, Int(Double(contextTokens - 1_300) * 3.5))
     }
 
     public static func load(
@@ -80,9 +97,11 @@ public final class MeetingSummarizer {
         modelId: String? = nil,
         cacheDir: URL? = nil,
         offlineMode: Bool = false,
+        transcriptCharBudget: Int? = nil,
         progress: (@Sendable (Double, String) -> Void)? = nil
     ) async throws -> MeetingSummarizer {
         let chat: any SummaryChat
+        let defaultBudget: Int
         switch backend {
         case .qwen35:
             chat = try await Qwen35MLXChat.fromPretrained(
@@ -91,6 +110,7 @@ public final class MeetingSummarizer {
                 offlineMode: offlineMode,
                 progressHandler: progress
             )
+            defaultBudget = 20_000
         case .gemma4:
             chat = try await Gemma4Chat.fromPretrained(
                 modelId: modelId ?? Self.defaultModelId(for: .gemma4),
@@ -98,8 +118,23 @@ public final class MeetingSummarizer {
                 offlineMode: offlineMode,
                 progressHandler: progress
             )
+            defaultBudget = 20_000
+        case .appleIntelligence:
+            #if canImport(FoundationModels)
+            guard #available(iOS 26.0, macOS 26.0, *) else {
+                throw SummaryBackendError.unavailable(.osTooOld)
+            }
+            progress?(0.5, "Checking Apple Intelligence")
+            let apple = try AppleIntelligenceChat()
+            progress?(1.0, "Ready")
+            chat = apple
+            defaultBudget = appleTranscriptCharBudget(contextTokens: apple.contextTokens)
+            #else
+            throw SummaryBackendError.unavailable(.osTooOld)
+            #endif
         }
-        return MeetingSummarizer(chat: chat)
+        return MeetingSummarizer(
+            chat: chat, transcriptCharBudget: transcriptCharBudget ?? defaultBudget)
     }
 
     /// Produce a headline + markdown overview. The caller stamps `generatedAt`.

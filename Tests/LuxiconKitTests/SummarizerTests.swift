@@ -304,6 +304,35 @@ final class MockChat: SummaryChat {
     }
 }
 
+@Suite struct AppleBackendTests {
+    @Test func appleBackendParsesFromCLIRawValue() {
+        #expect(MeetingSummarizer.Backend(rawValue: "apple") == .appleIntelligence)
+        // Existing raw values must not shift under the new case.
+        #expect(MeetingSummarizer.Backend(rawValue: "qwen35") == .qwen35)
+        #expect(MeetingSummarizer.Backend(rawValue: "gemma4") == .gemma4)
+    }
+
+    @Test func appleBackendHasNoModelDirectory() {
+        // "Remove Model" deletes exactly this directory — for the OS-managed
+        // model there must be nothing the app could delete.
+        #expect(throws: SummaryBackendError.noModelDirectory) {
+            try MeetingSummarizer.modelCacheDirectory(for: .appleIntelligence)
+        }
+    }
+
+    @Test func appleBudgetScalesWithContextWindow() {
+        // 4,096-token window (iOS 26) → high-single-digit-thousands of chars
+        // per pass; 8,192 (iOS 27) → the whole current transcript budget fits.
+        let small = MeetingSummarizer.appleTranscriptCharBudget(contextTokens: 4_096)
+        let large = MeetingSummarizer.appleTranscriptCharBudget(contextTokens: 8_192)
+        #expect((8_000...12_000).contains(small))
+        #expect(large > 20_000)
+        #expect(small < large)
+        // Degenerate window reports must never produce a zero/negative budget.
+        #expect(MeetingSummarizer.appleTranscriptCharBudget(contextTokens: 0) >= 4_000)
+    }
+}
+
 @Suite struct SummarizerChunkingTests {
     /// Turns with predictable rendered size: "S1: " + ~96 chars ≈ 100 chars/line.
     private func turns(_ count: Int) -> [TranscriptTurn] {

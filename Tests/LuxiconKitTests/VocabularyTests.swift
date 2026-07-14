@@ -62,3 +62,49 @@ import Testing
         #expect(ctx?.contains("Sam Rivera, Choreo") == true)
     }
 }
+
+@Suite struct ProtectedAliasTests {
+    /// The real-world failure: an LLM-generated vocab file mapped "this" → SIS
+    /// and "have" → AV, rewriting every occurrence in 45 minutes of meeting.
+    @Test func functionWordAliasesAreNeverApplied() {
+        let entries = [
+            VocabularyEntry(term: "SIS", soundsLike: ["sis", "this"]),
+            VocabularyEntry(term: "AV", soundsLike: ["have", "A V"]),
+        ]
+        let text = "I think this is the best we have."
+        let out = VocabularyCorrector.correct(text, entries: entries)
+        #expect(out.contains("this"))
+        #expect(out.contains("have"))
+        #expect(!out.contains("SIS"))
+        #expect(!out.contains("AV"))
+    }
+
+    @Test func rareRealWordAliasesStillApply() {
+        let entries = [VocabularyEntry(term: "CTL", soundsLike: ["cattle"])]
+        let out = VocabularyCorrector.correct("The cattle office called.", entries: entries)
+        #expect(out == "The CTL office called.")
+    }
+
+    @Test func multiWordAliasesWithFunctionWordsStillApply() {
+        let entries = [VocabularyEntry(term: "Ad Astra", soundsLike: ["at astra"])]
+        let out = VocabularyCorrector.correct("We reviewed at astra yesterday.", entries: entries)
+        #expect(out == "We reviewed Ad Astra yesterday.")
+    }
+
+    @Test func safeAliasesOfTheSameEntrySurviveProtectedSiblings() {
+        let entries = [VocabularyEntry(term: "SIS", soundsLike: ["this", "cysts"])]
+        let out = VocabularyCorrector.correct("The cysts migration and this plan.", entries: entries)
+        #expect(out.contains("SIS migration"))
+        #expect(out.contains("this plan"))
+    }
+
+    @Test func ignoredAliasesReportsForLint() {
+        let entries = [
+            VocabularyEntry(term: "SIS", soundsLike: ["sis", "this", "cysts"]),
+            VocabularyEntry(term: "AV", soundsLike: ["have"]),
+            VocabularyEntry(term: "HECVAT", soundsLike: ["heck vat"]),
+        ]
+        let ignored = VocabularyCorrector.ignoredAliases(in: entries)
+        #expect(ignored.map(\.alias).sorted() == ["have", "this"])
+    }
+}

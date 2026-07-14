@@ -41,7 +41,14 @@ extension Store {
             let entries = try VocabularyJSON.parse(data)
             vocabularyEntries = entries
             vocabularyLastSync = Date()
-            vocabularySyncError = nil
+            // Sync succeeded — but tell the user about aliases the corrector
+            // refuses to apply (common English words; see isProtectedAlias),
+            // so the fix lands in the source file, not in silence.
+            let ignored = VocabularyCorrector.ignoredAliases(in: entries)
+            vocabularySyncError = ignored.isEmpty ? nil :
+                "Synced, but ignoring unsafe soundsLike entries (common English words): "
+                + ignored.map { "\"\($0.alias)\" → \($0.term)" }.joined(separator: ", ")
+                + ". Remove them from the source file."
             save()
         } catch {
             vocabularySyncError = error.localizedDescription

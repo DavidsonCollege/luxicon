@@ -67,7 +67,12 @@ public enum VocabularyJSON {
         - "term": the canonical spelling, exactly as it should appear in transcripts.
         - "soundsLike": up to 3 plausible speech-to-text mishearings — phonetically \
         similar words or spellings a recognizer might produce instead. Omit when \
-        the term is unlikely to be misheard.
+        the term is unlikely to be misheard. NEVER use a common English word as a \
+        soundsLike entry ("this", "have", "will", "quality"): these are replaced \
+        everywhere they appear, so one common-word alias rewrites the whole \
+        transcript. Prefer non-word spellings ("furpa", "empsy") or multi-word \
+        phrases ("heck vat"); a real word is acceptable only when it is rare in \
+        workplace speech ("cattle").
         - "category": one of name, project, acronym, place, other.
         - "notes": brief context for future maintenance (the app ignores it).
         - Include: names of people I work with, project and system names, \

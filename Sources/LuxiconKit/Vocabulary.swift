@@ -46,10 +46,58 @@ public enum VocabularyCorrector {
     public static func correct(_ text: String, entries: [VocabularyEntry]) -> String {
         var result = text
         for entry in entries where !entry.soundsLike.isEmpty {
-            result = replaceAliases(in: result, aliases: entry.soundsLike, with: entry.term)
+            let aliases = entry.soundsLike.filter { !isProtectedAlias($0) }
+            guard !aliases.isEmpty else { continue }
+            result = replaceAliases(in: result, aliases: aliases, with: entry.term)
         }
         return correct(result, vocabulary: entries.map(\.term))
     }
+
+    /// True for aliases the corrector refuses to apply: a single English
+    /// function word (or near-universal conversational word). Alias
+    /// replacement is exact and every-occurrence, so one entry like
+    /// `SIS ← "this"` (seen in a real LLM-generated vocabulary file) rewrites
+    /// the entire transcript. No legitimate mishearing maps one of these to a
+    /// term; multi-word aliases ("heck vat") are untouched.
+    static func isProtectedAlias(_ alias: String) -> Bool {
+        let words = alias.lowercased().split(separator: " ")
+        return words.count == 1 && protectedAliasWords.contains(String(words[0]))
+    }
+
+    /// Aliases the corrector will ignore, for lint/UI surfacing at sync time.
+    public static func ignoredAliases(in entries: [VocabularyEntry]) -> [(term: String, alias: String)] {
+        entries.flatMap { entry in
+            entry.soundsLike.filter(isProtectedAlias).map { (entry.term, $0) }
+        }
+    }
+
+    /// English function words plus the most common conversational verbs and
+    /// fillers — the words whose global replacement destroys a transcript.
+    /// Deliberately NOT the full dictionary: real-word mishearings of rarer
+    /// words ("cattle" → CTL, "quality" → Kuali) are the soundsLike feature's
+    /// legitimate purpose and stay allowed.
+    static let protectedAliasWords: Set<String> = [
+        "a", "about", "above", "after", "again", "against", "all", "am", "an",
+        "and", "any", "are", "as", "at", "back", "be", "because", "been",
+        "before", "being", "below", "between", "both", "but", "by", "can",
+        "come", "could", "did", "do", "does", "doing", "down", "during",
+        "each", "even", "few", "for", "from", "further", "get", "go", "going",
+        "good", "got", "had", "has", "have", "having", "he", "her", "here",
+        "hers", "herself", "him", "himself", "his", "how", "i", "if", "in",
+        "into", "is", "it", "its", "itself", "just", "know", "like", "look",
+        "make", "many", "me", "mean", "more", "most", "much", "my", "myself",
+        "need", "no", "nor", "not", "now", "of", "off", "okay", "on", "once",
+        "one", "only", "or", "other", "our", "ours", "ourselves", "out",
+        "over", "own", "people", "really", "right", "said", "same", "say",
+        "see", "she", "should", "so", "some", "still", "such", "take", "than",
+        "that", "the", "their", "theirs", "them", "themselves", "then",
+        "there", "these", "they", "thing", "things", "think", "this", "those",
+        "through", "time", "to", "too", "two", "under", "until", "up", "very",
+        "want", "was", "way", "we", "well", "were", "what", "when", "where",
+        "which", "while", "who", "whom", "why", "will", "with", "work",
+        "would", "yeah", "yes", "you", "your", "yours", "yourself",
+        "yourselves",
+    ]
 
     /// Replace exact (case-insensitive, whole-word) occurrences of known
     /// mishearings with the canonical term. Multi-word aliases supported.

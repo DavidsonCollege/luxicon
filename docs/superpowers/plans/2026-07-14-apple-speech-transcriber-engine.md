@@ -19,32 +19,29 @@
 - The `.xcodeproj` is generated — but no App source files are added or removed by this plan, so **no `xcodegen generate` is required**.
 - SDK-name caveat: `SpeechAnalyzer`-family symbol names in Task 2 were taken from Apple's docs index (`analyzeSequence(_:)`, `finalizeAndFinishThroughEndOfInput()`, `setContext(_:)`, `AnalysisContext.contextualStrings`, `AssetInventory.assetInstallationRequest(supporting:)`, `SpeechTranscriber.supportedLocale(equivalentTo:)`, `SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith:)`). If a signature differs when compiling against the real SDK (this Mac runs macOS 26 and `swift build` will tell you), adapt to the SDK — the *shape* of the design is what's binding, not the exact spelling.
 - Commit messages follow the repo style: `Kit: …`, `App: …`, `CLI: …`, `Docs: …`.
+- **Branch:** implementation happens on a feature branch off `main` (e.g. `feat/apple-speech-engine`), merged via PR like the rest of this repo's work.
+- **Dirty worktree caution:** `main`'s working tree currently carries unrelated in-flight modifications (`SessionDetailView.swift`, `AppleIntelligenceChat.swift`, `Export.swift`, `MeetingSummarizer.swift`, `SummarizerTests.swift`). Never `git add -A` / `git add .` — stage only the files each task names.
 
 ---
 
-### Task 1: `ASRContext` — richer context type through the `TurnTranscriber` seam
+### Task 1: Vocabulary context becomes a term list through the `TurnTranscriber` seam
 
-The protocol currently passes `context: String?` (prose, for Qwen3's decoder).
-Apple's `AnalysisContext.contextualStrings` wants discrete terms, not prose.
-Introduce a small struct carrying both, and a `VocabularyCorrector.contextTerms`
-producer.
+The protocol passes `context: String?` — a prose biasing prompt whose only
+consumer (Qwen3-ASR) was retired on main 2026-07-14 (`2552916`). Apple's
+`AnalysisContext.contextualStrings` wants discrete terms. Replace prose with
+terms end to end: `contextTerms(for:)` replaces `contextString(for:)`.
 
 **Files:**
-- Modify: `Sources/LuxiconKit/MeetingPipeline.swift` (protocol, both engine extensions, `process`, `transcribeBounded`)
-- Modify: `Sources/LuxiconKit/Vocabulary.swift` (add `contextTerms(for:)`)
-- Test: `Tests/LuxiconKitTests/VocabularyTests.swift`, `Tests/LuxiconKitTests/PipelineLogicTests.swift`
+- Modify: `Sources/LuxiconKit/MeetingPipeline.swift` (protocol, Parakeet extension, `process` line ~158, `transcribeBounded`)
+- Modify: `Sources/LuxiconKit/Vocabulary.swift` (replace `contextString(for:)`, update the type doc comment's item 1)
+- Test: `Tests/LuxiconKitTests/VocabularyTests.swift` (replace `contextStringBuildsAndSkipsEmpty` ~line 56), `Tests/LuxiconKitTests/PipelineLogicTests.swift`
 
 **Interfaces:**
 - Produces:
   ```swift
-  public struct ASRContext: Sendable {
-      public var prose: String?      // sentence-form biasing (Qwen3)
-      public var terms: [String]     // discrete terms (Apple contextualStrings)
-      public init(prose: String?, terms: [String])
-  }
-  // protocol change:
-  func transcribeTurn(_ audio: [Float], sampleRate: Int, context: ASRContext?) -> TranscriptionResult
-  // new producer:
+  // protocol change (context is now vocabulary terms):
+  func transcribeTurn(_ audio: [Float], sampleRate: Int, context: [String]?) -> TranscriptionResult
+  // replaces contextString(for:):
   VocabularyCorrector.contextTerms(for: [VocabularyEntry]) -> [String]
   ```
 
@@ -72,9 +69,9 @@ In `Tests/LuxiconKitTests/VocabularyTests.swift`, add to the existing suite:
 Run: `swift test --filter VocabularyTests`
 Expected: FAIL — `contextTerms` does not exist (compile error).
 
-- [ ] **Step 3: Implement `contextTerms` and refactor `contextString` over it**
+- [ ] **Step 3: Implement `contextTerms`, delete `contextString`**
 
-In `Sources/LuxiconKit/Vocabulary.swift`, replace the body of `contextString(for:)` and add the new function:
+In `Sources/LuxiconKit/Vocabulary.swift`, replace `contextString(for:)` with:
 
 ```swift
     /// Discrete vocabulary terms for engines that bias on term lists
@@ -84,87 +81,58 @@ In `Sources/LuxiconKit/Vocabulary.swift`, replace the body of `contextString(for
             .map { $0.term.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
     }
-
-    /// Context prompt handed to prose-context ASR engines (Qwen3-ASR).
-    public static func contextString(for entries: [VocabularyEntry]) -> String? {
-        let terms = contextTerms(for: entries)
-        guard !terms.isEmpty else { return nil }
-        return "This conversation may mention the following names and terms: "
-            + terms.joined(separator: ", ") + "."
-    }
 ```
+
+Update item 1 of the `VocabularyCorrector` type doc comment to match:
+
+```swift
+/// 1. `contextTerms(for:)` — decoder-level biasing for engines that accept
+///    contextual terms (Apple SpeechTranscriber).
+```
+
+Delete the now-orphaned `contextStringBuildsAndSkipsEmpty` test (~line 56 of
+`VocabularyTests.swift`) — its intent is covered by the two new tests.
 
 - [ ] **Step 4: Run to verify pass**
 
 Run: `swift test --filter VocabularyTests`
-Expected: PASS (all existing vocabulary tests still green — `contextString` behavior unchanged).
+Expected: PASS.
 
-- [ ] **Step 5: Introduce `ASRContext` and change the protocol**
+- [ ] **Step 5: Change the protocol's context parameter to terms**
 
-In `Sources/LuxiconKit/MeetingPipeline.swift`:
-
-Add above the protocol:
-
-```swift
-/// Vocabulary context for ASR engines, in both shapes engines consume.
-public struct ASRContext: Sendable {
-    /// Sentence-form biasing prompt (Qwen3-ASR decoder context).
-    public var prose: String?
-    /// Discrete terms (Apple SpeechTranscriber contextual strings).
-    public var terms: [String]
-
-    public init(prose: String?, terms: [String]) {
-        self.prose = prose
-        self.terms = terms
-    }
-}
-```
-
-Change the protocol method:
+In `Sources/LuxiconKit/MeetingPipeline.swift`, change the protocol method:
 
 ```swift
 public protocol TurnTranscriber: AnyObject {
     /// Whether `context` is honored (decoder-level vocabulary biasing).
     var supportsContext: Bool { get }
-    func transcribeTurn(_ audio: [Float], sampleRate: Int, context: ASRContext?) -> TranscriptionResult
+    func transcribeTurn(_ audio: [Float], sampleRate: Int, context: [String]?) -> TranscriptionResult
 }
 ```
 
-Update both existing conformances:
+Update the Parakeet conformance (the only one left):
 
 ```swift
 extension ParakeetASRModel: TurnTranscriber {
     public var supportsContext: Bool { false }
-    public func transcribeTurn(_ audio: [Float], sampleRate: Int, context: ASRContext?) -> TranscriptionResult {
+    public func transcribeTurn(_ audio: [Float], sampleRate: Int, context: [String]?) -> TranscriptionResult {
         transcribeWithLanguage(audio: audio, sampleRate: sampleRate, language: nil)
     }
 }
-
-extension Qwen3ASRModel: TurnTranscriber {
-    public var supportsContext: Bool { true }
-    public func transcribeTurn(_ audio: [Float], sampleRate: Int, context: ASRContext?) -> TranscriptionResult {
-        let text = transcribe(audio: audio, sampleRate: sampleRate, context: context?.prose)
-        return TranscriptionResult(text: text)
-    }
-}
 ```
 
-In `process(...)` (step 4, "Transcribe each turn"), replace the context line:
+In `process(...)` (~line 158), replace the context line:
 
 ```swift
-        let context: ASRContext? = asr.supportsContext
-            ? ASRContext(
-                prose: VocabularyCorrector.contextString(for: vocabulary),
-                terms: VocabularyCorrector.contextTerms(for: vocabulary))
-            : nil
+        let context = asr.supportsContext ? VocabularyCorrector.contextTerms(for: vocabulary) : nil
 ```
 
-Update `transcribeBounded`'s signature (`context: String?` → `context: ASRContext?`); its body only forwards `context`, so nothing else changes.
+Update `transcribeBounded`'s signature (`context: String?` → `context: [String]?`); its body only forwards `context`, so nothing else changes.
 
 - [ ] **Step 6: Update the test mock's signature**
 
 In `Tests/LuxiconKitTests/PipelineLogicTests.swift` line ~164, the mock transcriber's
-`transcribeTurn(_ audio:sampleRate:context: String?)` becomes `context: ASRContext?`.
+`transcribeTurn(_ audio:sampleRate:context: String?)` becomes `context: [String]?`.
 The `transcribeBounded(..., context: nil)` call sites need no change.
 
 - [ ] **Step 7: Run the full suite**
@@ -176,7 +144,7 @@ Expected: PASS.
 
 ```bash
 git add Sources/LuxiconKit/MeetingPipeline.swift Sources/LuxiconKit/Vocabulary.swift Tests/LuxiconKitTests/VocabularyTests.swift Tests/LuxiconKitTests/PipelineLogicTests.swift
-git commit -m "Kit: pass vocabulary context as ASRContext (prose + terms) through TurnTranscriber"
+git commit -m "Kit: vocabulary context through TurnTranscriber is a term list, not prose"
 ```
 
 ---
@@ -188,7 +156,7 @@ git commit -m "Kit: pass vocabulary context as ASRContext (prose + terms) throug
 - Test: `Tests/LuxiconKitTests/AppleSpeechTranscriberTests.swift` (buffer conversion only — offline)
 
 **Interfaces:**
-- Consumes: `ASRContext`, `TurnTranscriber`, `TranscriptionResult` (from Task 1 / speech-swift).
+- Consumes: `TurnTranscriber` with `context: [String]?` (Task 1), `TranscriptionResult` (speech-swift).
 - Produces:
   ```swift
   @available(iOS 26.0, macOS 26.0, *)
@@ -200,7 +168,7 @@ git commit -m "Kit: pass vocabulary context as ASRContext (prose + terms) throug
       public static func load(progress: (@Sendable (Double, String) -> Void)?) async throws -> AppleSpeechTranscriber
       // TurnTranscriber:
       public var supportsContext: Bool { true }
-      public func transcribeTurn(_ audio: [Float], sampleRate: Int, context: ASRContext?) -> TranscriptionResult
+      public func transcribeTurn(_ audio: [Float], sampleRate: Int, context: [String]?) -> TranscriptionResult
       // testable helper:
       static func pcmBuffer(from samples: [Float], sampleRate: Int, converting to: AVAudioFormat?) throws -> AVAudioPCMBuffer
   }
@@ -320,7 +288,7 @@ public final class AppleSpeechTranscriber: TurnTranscriber {
     /// already runs on a background task, so blocking this thread is the
     /// same contract the CoreML/MLX engines have.
     public func transcribeTurn(
-        _ audio: [Float], sampleRate: Int, context: ASRContext?
+        _ audio: [Float], sampleRate: Int, context: [String]?
     ) -> TranscriptionResult {
         let semaphore = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var result = TranscriptionResult(text: "")
@@ -329,7 +297,7 @@ public final class AppleSpeechTranscriber: TurnTranscriber {
             do {
                 let text = try await Self.analyze(
                     audio: audio, sampleRate: sampleRate, locale: locale,
-                    format: analyzerFormat, terms: context?.terms ?? [])
+                    format: analyzerFormat, terms: context ?? [])
                 result = TranscriptionResult(text: text)
             } catch {
                 // Per-turn failure → empty text; process() skips empty turns.
@@ -459,7 +427,7 @@ git commit -m "Kit: AppleSpeechTranscriber engine over SpeechAnalyzer (iOS 26+)"
 - Consumes: `AppleSpeechTranscriber.load(progress:)` (Task 2).
 - Produces:
   ```swift
-  public enum ASREngine: String, Codable, Sendable { case parakeet, qwen3, appleSpeech }
+  public enum ASREngine: String, Codable, Sendable { case parakeet, appleSpeech }
   ASREngine.resolvedDefault() -> ASREngine                     // OS-gated
   ASREngine.resolvedDefault(appleSpeechAvailable: Bool) -> ASREngine  // testable
   ```
@@ -487,17 +455,19 @@ Expected: FAIL — `appleSpeech` case does not exist (compile error).
 
 - [ ] **Step 3: Implement**
 
-In `Sources/LuxiconKit/MeetingPipeline.swift`, extend the enum:
+In `Sources/LuxiconKit/MeetingPipeline.swift`, extend the enum. It already has
+a custom tolerant `init(from:)` (added when Qwen3 was retired — unknown raw
+values decode to `.parakeet`); keep it exactly as is, add the case and the
+resolver:
 
 ```swift
-/// Which ASR engine transcribes speaker turns.
 public enum ASREngine: String, Codable, Sendable {
     /// Parakeet TDT — CoreML/ANE, fast, the pre-iOS-26 default.
     case parakeet
-    /// Qwen3-ASR 0.6B 4-bit — MLX/GPU, supports vocabulary context injection.
-    case qwen3
     /// Apple SpeechTranscriber — system model, out-of-process, iOS 26+.
     case appleSpeech
+
+    // (existing tolerant init(from:) stays unchanged)
 
     /// Default engine for this device: Apple's system transcriber where the
     /// OS supports it, otherwise Parakeet. Locale/asset failures surface at
@@ -515,6 +485,10 @@ public enum ASREngine: String, Codable, Sendable {
     }
 }
 ```
+
+Also update the enum's leading doc comment: it currently says the enum is
+"single-cased today" pending a successor engine — this task delivers that
+successor, so rewrite it to describe the two cases.
 
 In `MeetingPipeline.load(engine:progress:)`, add the branch. The `appleSpeech`
 case must throw if the OS is too old (an explicit request for an unavailable
@@ -548,9 +522,12 @@ In `Sources/LuxiconCLI/LuxiconCLI.swift:192`, update the flag error message:
 
 ```swift
                 guard let parsed = ASREngine(rawValue: try value(after: "--engine", at: i)) else {
-                    throw ValidationError("--engine expects parakeet, qwen3, or appleSpeech")
+                    throw ValidationError("--engine expects parakeet or appleSpeech")
                 }
 ```
+
+(`init(rawValue:)` stays strict for the CLI — the tolerant decode is only the
+Codable path.)
 
 - [ ] **Step 4: Run tests and build**
 
@@ -638,12 +615,14 @@ In `App/Sources/Store.swift` (~line 84), replace `var asrEngine: ASREngine = .pa
 
 - [ ] **Step 2: Update `Persisted` and `load()`**
 
-In `Persisted` (~line 150), keep the legacy field and add the new one:
+In `Persisted` (~line 150), keep the legacy field (harmless to decode; the
+tolerant `ASREngine` decoder maps any old value to `.parakeet`) and add the
+new one:
 
 ```swift
-        /// Legacy engine field: read-only for migration, never written.
-        /// (No released build had a picker, so a persisted "parakeet" was a
-        /// default, not a choice; only a hand-set "qwen3" counts as one.)
+        /// Legacy engine field: ignored on read, never written. Post-Qwen3
+        /// retirement it can only decode to .parakeet, and a default was
+        /// never distinguishable from a choice under this key anyway.
         var asrEngine: ASREngine?
         var asrEngineChoice: ASREngine?
 ```
@@ -652,7 +631,6 @@ In `load()` (~line 233), replace `asrEngine = persisted.asrEngine ?? .parakeet` 
 
 ```swift
         asrEngineChoice = persisted.asrEngineChoice
-            ?? (persisted.asrEngine == .qwen3 ? .qwen3 : nil)
 ```
 
 - [ ] **Step 3: Update `save()`**
@@ -697,7 +675,9 @@ git commit -m "App: engine preference becomes optional choice; automatic default
 
 - [ ] **Step 1: Add the Transcription section to `MyVoiceView`**
 
-After `aiSummariesSection` (~line 97), following the file's existing Section style:
+Where the retired Qwen3 engine picker used to sit — after the People-sync
+`SyncSourceSection`, before the Mac sync section (~line 141) — following the
+file's existing Section style:
 
 ```swift
             if #available(iOS 26.0, *) {
@@ -717,8 +697,8 @@ After `aiSummariesSection` (~line 97), following the file's existing Section sty
             }
 ```
 
-(On iOS 18–25 the section is hidden: Parakeet is the only real option, and
-Qwen3 stays a CLI/debug engine as today.)
+(On iOS 18–25 the section is hidden: Parakeet is the only option there, so
+there is nothing to pick.)
 
 - [ ] **Step 2: Add load-time fallback in `PipelineService.ensureLoaded`**
 

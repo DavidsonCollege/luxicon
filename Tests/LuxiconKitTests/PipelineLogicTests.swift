@@ -153,3 +153,66 @@ import SpeechVAD
         #expect(stats[1].longestTurn == 54)
     }
 }
+
+@Suite struct BoundedTranscriptionTests {
+    /// Records each call's sample count; returns canned text per call.
+    private final class StubASR: TurnTranscriber {
+        var supportsContext: Bool { false }
+        var callSizes: [Int] = []
+        var texts: [String]
+        init(texts: [String] = []) { self.texts = texts }
+        func transcribeTurn(_ audio: [Float], sampleRate: Int, context: String?) -> TranscriptionResult {
+            callSizes.append(audio.count)
+            let text = callSizes.count <= texts.count ? texts[callSizes.count - 1] : "chunk\(callSizes.count)"
+            return TranscriptionResult(text: text, confidence: 0.5)
+        }
+    }
+
+    @Test func shortAudioIsSingleChunk() {
+        let ranges = MeetingPipeline.chunkRanges(sampleCount: 16000 * 30, sampleRate: 16000, maxSeconds: 60)
+        #expect(ranges == [0..<(16000 * 30)])
+    }
+
+    @Test func emptyAudioHasNoChunks() {
+        #expect(MeetingPipeline.chunkRanges(sampleCount: 0, sampleRate: 16000, maxSeconds: 60).isEmpty)
+    }
+
+    @Test func longAudioSplitsAtMaxAndCoversEverything() {
+        let total = 16000 * 150  // 2.5 min → 60s + 60s + 30s
+        let ranges = MeetingPipeline.chunkRanges(sampleCount: total, sampleRate: 16000, maxSeconds: 60)
+        #expect(ranges.count == 3)
+        #expect(ranges[0].count == 16000 * 60 && ranges[1].count == 16000 * 60 && ranges[2].count == 16000 * 30)
+        #expect(ranges.first?.lowerBound == 0 && ranges.last?.upperBound == total)
+        for (a, b) in zip(ranges, ranges.dropFirst()) { #expect(a.upperBound == b.lowerBound) }
+    }
+
+    @Test func subSecondTailFoldsIntoPreviousChunk() {
+        let total = 16000 * 60 + 8000  // 60s + 0.5s tail
+        let ranges = MeetingPipeline.chunkRanges(sampleCount: total, sampleRate: 16000, maxSeconds: 60)
+        #expect(ranges == [0..<total])  // tail folded; last chunk may exceed maxSeconds by design
+    }
+
+    @Test func longTurnTranscribesInChunksAndJoinsText() {
+        let asr = StubASR(texts: ["first part", "second part", "tail"])
+        let samples = [Float](repeating: 0, count: 16000 * 150)
+        let result = MeetingPipeline.transcribeBounded(samples, asr: asr, sampleRate: 16000, context: nil)
+        #expect(asr.callSizes == [16000 * 60, 16000 * 60, 16000 * 30])
+        #expect(result.text == "first part second part tail")
+        #expect(abs(result.confidence - 0.5) < 0.0001)
+    }
+
+    @Test func emptyChunkTextIsSkippedInJoin() {
+        let asr = StubASR(texts: ["hello", "  ", "world"])
+        let samples = [Float](repeating: 0, count: 16000 * 150)
+        let result = MeetingPipeline.transcribeBounded(samples, asr: asr, sampleRate: 16000, context: nil)
+        #expect(result.text == "hello world")
+    }
+
+    @Test func shortTurnIsOneASRCall() {
+        let asr = StubASR(texts: ["short"])
+        let samples = [Float](repeating: 0, count: 16000 * 20)
+        let result = MeetingPipeline.transcribeBounded(samples, asr: asr, sampleRate: 16000, context: nil)
+        #expect(asr.callSizes == [16000 * 20])
+        #expect(result.text == "short")
+    }
+}

@@ -172,7 +172,7 @@ public final class MeetingPipeline {
             let hi = min(audio.count, Int((span.end + options.asrPadding) * Double(sr)))
             guard hi > lo else { continue }
             let slice = Array(audio[lo..<hi])
-            let asrResult = asr.transcribeTurn(slice, sampleRate: sr, context: context)
+            let asrResult = Self.transcribeBounded(slice, asr: asr, sampleRate: sr, context: context)
             var text = asrResult.text.trimmingCharacters(in: .whitespacesAndNewlines)
             text = VocabularyCorrector.correct(text, entries: vocabulary)
             guard !text.isEmpty else { continue }
@@ -197,6 +197,72 @@ public final class MeetingPipeline {
         }
         progress?(1.0, "Done")
         return transcript
+    }
+
+    // MARK: - Bounded transcription
+
+    /// Longest audio span fed to the ASR engine in one call; bounds the
+    /// autorelease accumulation per pool drain in `transcribeBounded`.
+    static let maxASRChunkSeconds: TimeInterval = 60
+
+    /// Split `sampleCount` samples into consecutive chunks of at most
+    /// `maxSeconds`. A sub-second tail is folded into the previous chunk —
+    /// it can't carry a word, and some engines choke on near-empty input —
+    /// so the last chunk may slightly exceed `maxSeconds` by design.
+    static func chunkRanges(sampleCount: Int, sampleRate: Int, maxSeconds: TimeInterval) -> [Range<Int>] {
+        guard sampleCount > 0 else { return [] }
+        let maxLen = max(1, Int(maxSeconds * Double(sampleRate)))
+        guard sampleCount > maxLen else { return [0..<sampleCount] }
+        var ranges: [Range<Int>] = []
+        var start = 0
+        while start < sampleCount {
+            let end = min(start + maxLen, sampleCount)
+            ranges.append(start..<end)
+            start = end
+        }
+        if let last = ranges.last, ranges.count > 1, last.count < sampleRate {
+            ranges.removeLast()
+            let previous = ranges.removeLast()
+            ranges.append(previous.lowerBound..<last.upperBound)
+        }
+        return ranges
+    }
+
+    /// Run the ASR engine over one turn's audio in bounded chunks, each
+    /// inside its own autoreleasepool.
+    ///
+    /// CoreML predictions autorelease their output buffers, and `process`
+    /// runs synchronously on one thread with no suspension points — nothing
+    /// drains until the whole meeting is done. On a 45-minute recording that
+    /// accumulated ANE-backed buffers from hundreds of thousands of decoder
+    /// predictions until CoreML's E5 runtime failed to bind one and raised an
+    /// uncatchable NSException (MLE5BindEmptyMemoryObjectToPort → SIGABRT).
+    /// Draining per chunk keeps the pool bounded regardless of turn length.
+    static func transcribeBounded(
+        _ samples: [Float], asr: any TurnTranscriber, sampleRate: Int, context: String?
+    ) -> TranscriptionResult {
+        let ranges = chunkRanges(
+            sampleCount: samples.count, sampleRate: sampleRate, maxSeconds: maxASRChunkSeconds)
+        if ranges.count <= 1 {
+            return autoreleasepool { asr.transcribeTurn(samples, sampleRate: sampleRate, context: context) }
+        }
+        var texts: [String] = []
+        var confidenceSum: Float = 0
+        var confidenceWeight = 0
+        for range in ranges {
+            let piece = autoreleasepool {
+                asr.transcribeTurn(Array(samples[range]), sampleRate: sampleRate, context: context)
+            }
+            let text = piece.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+            texts.append(text)
+            confidenceSum += piece.confidence * Float(range.count)
+            confidenceWeight += range.count
+        }
+        return TranscriptionResult(
+            text: texts.joined(separator: " "),
+            confidence: confidenceWeight > 0 ? confidenceSum / Float(confidenceWeight) : 0
+        )
     }
 
     // MARK: - Steps (internal, unit-testable)

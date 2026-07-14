@@ -25,21 +25,19 @@ public struct VocabularyEntry: Codable, Sendable, Equatable, Hashable {
 
 /// Grounds transcripts in user-specific vocabulary (participant names, org
 /// terms) three ways:
-/// 1. `contextString(for:)` — decoder-level biasing for engines that accept a
-///    context prompt (Qwen3-ASR).
+/// 1. `contextTerms(for:)` — decoder-level biasing for engines that accept
+///    contextual terms (Apple SpeechTranscriber).
 /// 2. Exact alias replacement — each entry's `soundsLike` mishearings.
 /// 3. Fuzzy repair of near-miss words ("Sam Riviera" → "Sam Rivera") via
 ///    edit-distance matching.
 public enum VocabularyCorrector {
 
-    /// Context prompt handed to context-capable ASR engines.
-    public static func contextString(for entries: [VocabularyEntry]) -> String? {
-        let terms = entries
+    /// Discrete vocabulary terms for engines that bias on term lists
+    /// (Apple SpeechTranscriber's contextual strings).
+    public static func contextTerms(for entries: [VocabularyEntry]) -> [String] {
+        entries
             .map { $0.term.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        guard !terms.isEmpty else { return nil }
-        return "This conversation may mention the following names and terms: "
-            + terms.joined(separator: ", ") + "."
     }
 
     /// Full pipeline: exact alias replacement, then fuzzy near-miss repair.

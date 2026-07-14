@@ -8,14 +8,14 @@ import ParakeetASR
 public protocol TurnTranscriber: AnyObject {
     /// Whether `context` is honored (decoder-level vocabulary biasing).
     var supportsContext: Bool { get }
-    func transcribeTurn(_ audio: [Float], sampleRate: Int, context: String?) -> TranscriptionResult
+    func transcribeTurn(_ audio: [Float], sampleRate: Int, context: [String]?) -> TranscriptionResult
 }
 
 /// Parakeet TDT (CoreML, Neural Engine). Fast and battery-friendly; no
 /// context biasing — vocabulary grounding happens post-ASR.
 extension ParakeetASRModel: TurnTranscriber {
     public var supportsContext: Bool { false }
-    public func transcribeTurn(_ audio: [Float], sampleRate: Int, context: String?) -> TranscriptionResult {
+    public func transcribeTurn(_ audio: [Float], sampleRate: Int, context: [String]?) -> TranscriptionResult {
         transcribeWithLanguage(audio: audio, sampleRate: sampleRate, language: nil)
     }
 }
@@ -155,7 +155,7 @@ public final class MeetingPipeline {
         let turnSpans = Self.buildTurns(segments: result.segments, mergeGap: options.turnMergeGap)
 
         // 4. Transcribe each turn
-        let context = asr.supportsContext ? VocabularyCorrector.contextString(for: vocabulary) : nil
+        let context = asr.supportsContext ? VocabularyCorrector.contextTerms(for: vocabulary) : nil
         var turns: [TranscriptTurn] = []
         turns.reserveCapacity(turnSpans.count)
         for (i, span) in turnSpans.enumerated() {
@@ -233,7 +233,7 @@ public final class MeetingPipeline {
     /// uncatchable NSException (MLE5BindEmptyMemoryObjectToPort → SIGABRT).
     /// Draining per chunk keeps the pool bounded regardless of turn length.
     static func transcribeBounded(
-        _ samples: [Float], asr: any TurnTranscriber, sampleRate: Int, context: String?
+        _ samples: [Float], asr: any TurnTranscriber, sampleRate: Int, context: [String]?
     ) -> TranscriptionResult {
         let ranges = chunkRanges(
             sampleCount: samples.count, sampleRate: sampleRate, maxSeconds: maxASRChunkSeconds)

@@ -161,7 +161,7 @@ import SpeechVAD
         var callSizes: [Int] = []
         var texts: [String]
         init(texts: [String] = []) { self.texts = texts }
-        func transcribeTurn(_ audio: [Float], sampleRate: Int, context: String?) -> TranscriptionResult {
+        func transcribeTurn(_ audio: [Float], sampleRate: Int, context: [String]?) -> TranscriptionResult {
             callSizes.append(audio.count)
             let text = callSizes.count <= texts.count ? texts[callSizes.count - 1] : "chunk\(callSizes.count)"
             return TranscriptionResult(text: text, confidence: 0.5)

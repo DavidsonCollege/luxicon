@@ -53,13 +53,17 @@ import Testing
         #expect(VocabularyCorrector.correct(text, vocabulary: ["it", "so"]) == text)
     }
 
-    @Test func contextStringBuildsAndSkipsEmpty() {
-        #expect(VocabularyCorrector.contextString(for: []) == nil)
-        #expect(VocabularyCorrector.contextString(for: [VocabularyEntry(term: "  ")]) == nil)
-        let ctx = VocabularyCorrector.contextString(for: [
-            VocabularyEntry(term: "Sam Rivera"), VocabularyEntry(term: "Choreo"),
-        ])
-        #expect(ctx?.contains("Sam Rivera, Choreo") == true)
+    @Test func contextTermsReturnsTrimmedNonEmptyTerms() {
+        let entries = [
+            VocabularyEntry(term: "  Kubernetes "),
+            VocabularyEntry(term: ""),
+            VocabularyEntry(term: "Sam Rivera"),
+        ]
+        #expect(VocabularyCorrector.contextTerms(for: entries) == ["Kubernetes", "Sam Rivera"])
+    }
+
+    @Test func contextTermsEmptyForNoEntries() {
+        #expect(VocabularyCorrector.contextTerms(for: []) == [])
     }
 }
 

@@ -1,6 +1,9 @@
 import Foundation
 import AVFoundation
 import LuxiconKit
+#if canImport(UIKit)
+import UIKit
+#endif
 
 enum RecorderError: LocalizedError {
     case microphoneAccessDenied
@@ -26,8 +29,12 @@ enum RecorderError: LocalizedError {
 ///
 /// Interruptions (phone call, Siri) pause capture; the recorder resumes
 /// automatically when the session is handed back and exposes `isInterrupted`
-/// so the UI can say so. Write failures (disk full) surface via `runtimeError`
-/// instead of being silently swallowed.
+/// so the UI can say so. CallKit calls (Zoom Phone, etc.) often never deliver
+/// the `.ended` event — or deliver it while the other app still holds the mic —
+/// so the recorder also retries with backoff, retries when the app becomes
+/// active again, and offers `resumeFromInterruption()` for a manual escape
+/// hatch. Write failures (disk full) surface via `runtimeError` instead of
+/// being silently swallowed.
 final class Recorder: @unchecked Sendable {
     private let engine = AVAudioEngine()
     private let lock = NSLock()
@@ -46,6 +53,15 @@ final class Recorder: @unchecked Sendable {
     /// it. Confined to the main thread (set by `pause`/`resume`, read by the UI),
     /// like `isInterrupted`.
     private(set) var isPaused = false
+
+    /// Backoff schedule for re-trying capture after a failed interruption
+    /// recovery (the interrupting app can take a beat to release the mic).
+    private static let resumeRetryDelays: [TimeInterval] = [1, 2, 4]
+    /// Next index into `resumeRetryDelays`; main-thread confined.
+    private var resumeRetryAttempt = 0
+    /// Invalidates in-flight retry timers when bumped (stop, pause, a new
+    /// interruption, or a successful resume); main-thread confined.
+    private var resumeRetryGeneration = 0
 
     /// Called on the audio thread with each converted 16 kHz chunk
     /// (e.g. to feed live transcription). Set before `start`.
@@ -110,6 +126,7 @@ final class Recorder: @unchecked Sendable {
     func stop() -> [Float] {
         guard isRecording else { return [] }
         removeObservers()
+        resumeRetryGeneration += 1
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         isRecording = false
@@ -140,6 +157,7 @@ final class Recorder: @unchecked Sendable {
     func pause() {
         guard isRecording, !isPaused else { return }
         isPaused = true
+        resumeRetryGeneration += 1
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         level = 0
@@ -161,9 +179,18 @@ final class Recorder: @unchecked Sendable {
             try startEngine()
             isPaused = false
             isInterrupted = false
+            clearRuntimeError()
         } catch {
             setRuntimeError("Couldn't resume recording: \(error.localizedDescription). Stop to save what was captured.")
         }
+    }
+
+    /// Manual recovery when an interruption didn't end cleanly: CallKit calls
+    /// (Zoom Phone, the Phone app) often deliver no `.ended` event, or deliver
+    /// it while the other app still holds the mic. Safe to call anytime — it's
+    /// a no-op while capture is healthy, stopped, or off the record.
+    func resumeFromInterruption() {
+        resumeCapture()
     }
 
     // MARK: - Engine lifecycle
@@ -197,14 +224,40 @@ final class Recorder: @unchecked Sendable {
             #endif
             try startEngine()
             isInterrupted = false
+            resumeRetryAttempt = 0
+            resumeRetryGeneration += 1  // cancel any in-flight retry timers
+            clearRuntimeError()
         } catch {
-            setRuntimeError("Recording paused and could not resume: \(error.localizedDescription). Stop to save what was captured.")
+            setRuntimeError("Recording paused and could not resume: \(error.localizedDescription). Tap Resume to retry, or stop to save what was captured.")
+            scheduleResumeRetry()
+        }
+    }
+
+    /// A failed resume usually means the interrupting app hasn't released the
+    /// mic yet — try again shortly instead of staying silent forever.
+    private func scheduleResumeRetry() {
+        guard resumeRetryAttempt < Self.resumeRetryDelays.count else { return }
+        let delay = Self.resumeRetryDelays[resumeRetryAttempt]
+        resumeRetryAttempt += 1
+        let generation = resumeRetryGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, self.resumeRetryGeneration == generation else { return }
+            self.resumeCapture()
         }
     }
 
     private func setRuntimeError(_ message: String) {
         lock.lock()
         if runtimeErrorStorage == nil { runtimeErrorStorage = message }
+        lock.unlock()
+    }
+
+    /// Called when capture (re)starts cleanly: a stale "could not resume"
+    /// message must not outlive the recovery. A still-broken writer will
+    /// simply re-set its error on the next failed append.
+    private func clearRuntimeError() {
+        lock.lock()
+        runtimeErrorStorage = nil
         lock.unlock()
     }
 
@@ -219,6 +272,16 @@ final class Recorder: @unchecked Sendable {
             object: AVAudioSession.sharedInstance(), queue: .main
         ) { [weak self] note in
             self?.handleInterruption(note)
+        })
+        // CallKit interruptions (Zoom Phone, the Phone app) frequently end
+        // without an `.ended` notification — especially when the app was
+        // suspended during the call. Returning to the app is the one signal
+        // we always get, so use it to recover capture. No-op while healthy.
+        installed.append(center.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.resumeCapture()
         })
         #endif
         installed.append(center.addObserver(
@@ -247,6 +310,10 @@ final class Recorder: @unchecked Sendable {
         switch type {
         case .began:
             isInterrupted = true
+            // Fresh interruption: previous retry timers are stale, and the
+            // next `.ended` (if any) deserves a full retry budget.
+            resumeRetryGeneration += 1
+            resumeRetryAttempt = 0
         case .ended:
             // Always try to resume: for a meeting recorder, silently losing
             // the rest of the conversation is the worst outcome.

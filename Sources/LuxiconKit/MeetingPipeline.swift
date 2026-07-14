@@ -1,5 +1,6 @@
 import Foundation
 import AudioCommon
+import MLX
 import SpeechVAD
 import ParakeetASR
 import Qwen3ASR
@@ -48,6 +49,11 @@ public final class MeetingPipeline {
 
     /// Sample rate `process` expects. Load or record audio at this rate.
     public static let sampleRate = 16000
+
+    /// Ceiling for MLX's freed-buffer cache while `process` runs. Large enough
+    /// to reuse buffers within a window batch, small enough that a long
+    /// recording's parade of unique tensor shapes can't accumulate gigabytes.
+    static let gpuCacheLimit = 512 * 1024 * 1024
 
     public struct Options: Sendable {
         /// Hard cap on distinct speakers; extra diarized speakers are folded
@@ -131,6 +137,15 @@ public final class MeetingPipeline {
     ) throws -> MeetingTranscript {
         let sr = Self.sampleRate
         let duration = Double(audio.count) / Double(sr)
+
+        // MLX keeps every freed GPU buffer in a cache, and diarization runs
+        // ~3 embedding forward passes per 10 s window, each with a unique
+        // input length — so on long recordings the cache only ever grows
+        // (a 45-minute meeting reached iOS's ~6 GB per-process limit and was
+        // jetsam-killed). Cap the cache for the run and drop it afterwards;
+        // engines that need more (Qwen3ASR) raise their own limit when loaded.
+        MLX.Memory.cacheLimit = min(MLX.Memory.cacheLimit, Self.gpuCacheLimit)
+        defer { MLX.Memory.clearCache() }
 
         // 1. Diarize (≈ first 60% of the work)
         var result = diarizer.diarize(audio: audio, sampleRate: sr, config: options.diarization) { p, stage in

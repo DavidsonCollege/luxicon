@@ -43,11 +43,22 @@ struct RecordSheetView: View {
                         .padding(.horizontal)
 
                     if recorder.isInterrupted {
-                        Label("Recording paused by another audio session — it resumes automatically when the call ends.",
-                              systemImage: "pause.circle")
-                            .font(.footnote)
-                            .foregroundStyle(.orange)
-                            .padding(.horizontal)
+                        VStack(spacing: 8) {
+                            Label("Recording paused by another audio session — it usually resumes when the call ends.",
+                                  systemImage: "pause.circle")
+                                .font(.footnote)
+                                .foregroundStyle(.orange)
+                            // Escape hatch: CallKit calls don't reliably hand the
+                            // session back (see Recorder.resumeFromInterruption).
+                            Button {
+                                recorder.resumeFromInterruption()
+                            } label: {
+                                Label("Resume Recording", systemImage: "record.circle")
+                                    .font(.subheadline.weight(.medium))
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .padding(.horizontal)
                     }
                     if let runtimeError = recorder.runtimeError {
                         Text(runtimeError).font(.footnote).foregroundStyle(.red)

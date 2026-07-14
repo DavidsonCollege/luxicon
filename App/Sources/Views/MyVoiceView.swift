@@ -142,18 +142,6 @@ struct MyVoiceView: View {
             )
 
             Section {
-                Picker("Engine", selection: $store.asrEngine) {
-                    Text("Parakeet (recommended)").tag(ASREngine.parakeet)
-                    Text("Qwen3 (experimental)").tag(ASREngine.qwen3)
-                }
-                .onChange(of: store.asrEngine) { store.save() }
-            } header: {
-                Text("Transcription engine")
-            } footer: {
-                Text("Parakeet is fast and battery-friendly; vocabulary is applied as a correction pass. Qwen3 injects your vocabulary directly into the recognizer (better on unusual names) but downloads ~400 MB more and runs slower.")
-            }
-
-            Section {
                 ShareLink(item: URL(string: "https://github.com/DavidsonCollege/luxicon/releases")!) {
                     Label("Send installer link to your Mac", systemImage: "square.and.arrow.up")
                 }

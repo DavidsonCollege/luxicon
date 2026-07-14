@@ -30,7 +30,7 @@ struct LuxiconCLI {
               --title <title>           meeting title (default: file name)
               --vocab "a, b, c"         names/terms to ground transcription in
               --vocab-file terms.json   vocabulary JSON ({"terms":[{"term":...,"soundsLike":[...]}]})
-              --engine parakeet|qwen3   ASR engine (qwen3 supports --vocab context injection)
+              --engine parakeet         ASR engine (Parakeet TDT, CoreML)
             """)
             return
         }
@@ -190,7 +190,7 @@ struct LuxiconCLI {
                 i += 2
             case "--engine":
                 guard let parsed = ASREngine(rawValue: try value(after: "--engine", at: i)) else {
-                    throw ValidationError("--engine expects parakeet or qwen3")
+                    throw ValidationError("--engine expects parakeet")
                 }
                 engine = parsed
                 i += 2

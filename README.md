@@ -93,7 +93,7 @@ bash scripts/build_mlx_metallib.sh debug   # compile MLX Metal shaders
 First run may require the Metal toolchain: `xcodebuild -downloadComponent MetalToolchain`.
 
 Other flags: `--vocab "Choreo, OKR"` / `--vocab-file terms.json` ground
-transcription in your jargon, `--engine qwen3` switches the ASR engine, and
+transcription in your jargon, and
 `luxicon-cli push export.json --token <token> [--host <mac-ip>]` exercises
 the same sync path the app uses.
 

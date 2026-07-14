@@ -3,7 +3,6 @@ import AudioCommon
 import MLX
 import SpeechVAD
 import ParakeetASR
-import Qwen3ASR
 
 /// One speaker turn's worth of transcription, engine-agnostic.
 public protocol TurnTranscriber: AnyObject {
@@ -21,22 +20,22 @@ extension ParakeetASRModel: TurnTranscriber {
     }
 }
 
-/// Qwen3-ASR (MLX, GPU). Accepts a context prompt for true decoder-level
-/// vocabulary biasing. Heavier than Parakeet; foreground-only.
-extension Qwen3ASRModel: TurnTranscriber {
-    public var supportsContext: Bool { true }
-    public func transcribeTurn(_ audio: [Float], sampleRate: Int, context: String?) -> TranscriptionResult {
-        let text = transcribe(audio: audio, sampleRate: sampleRate, context: context)
-        return TranscriptionResult(text: text)
-    }
-}
-
-/// Which ASR engine transcribes speaker turns.
+/// Which ASR engine transcribes speaker turns. Single-cased today: the
+/// experimental Qwen3-ASR engine was removed 2026-07 (unstable on device;
+/// Apple Intelligence transcription is the planned successor), but the enum
+/// stays — it is persisted in store.json and is the seam a future engine
+/// plugs back into.
 public enum ASREngine: String, Codable, Sendable {
     /// Parakeet TDT — CoreML/ANE, fast, the default.
     case parakeet
-    /// Qwen3-ASR 0.6B 4-bit — MLX/GPU, supports vocabulary context injection.
-    case qwen3
+
+    /// Tolerant decode: an engine persisted by an older build (e.g. the
+    /// retired "qwen3") falls back to the default instead of failing the
+    /// entire store.json decode and taking the user's library with it.
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ASREngine(rawValue: raw) ?? .parakeet
+    }
 }
 
 /// End-to-end 1-on-1 processing: diarize → per-turn transcription → speaker naming.
@@ -104,10 +103,6 @@ public final class MeetingPipeline {
             asr = try await ParakeetASRModel.fromPretrained(progressHandler: { p, stage in
                 progress?(0.5 + p * 0.5, stage)
             })
-        case .qwen3:
-            asr = try await Qwen3ASRModel.fromPretrained(progressHandler: { p, stage in
-                progress?(0.5 + p * 0.5, stage)
-            })
         }
         return MeetingPipeline(diarizer: diarizer, asr: asr)
     }
@@ -142,8 +137,7 @@ public final class MeetingPipeline {
         // ~3 embedding forward passes per 10 s window, each with a unique
         // input length — so on long recordings the cache only ever grows
         // (a 45-minute meeting reached iOS's ~6 GB per-process limit and was
-        // jetsam-killed). Cap the cache for the run and drop it afterwards;
-        // engines that need more (Qwen3ASR) raise their own limit when loaded.
+        // jetsam-killed). Cap the cache for the run and drop it afterwards.
         MLX.Memory.cacheLimit = min(MLX.Memory.cacheLimit, Self.gpuCacheLimit)
         defer { MLX.Memory.clearCache() }
 

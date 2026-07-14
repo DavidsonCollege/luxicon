@@ -216,3 +216,24 @@ import SpeechVAD
         #expect(result.text == "short")
     }
 }
+
+@Suite struct ASREngineDecodeTests {
+    private struct Wrapper: Codable { var asrEngine: ASREngine? }
+
+    @Test func decodesParakeet() throws {
+        let w = try JSONDecoder().decode(Wrapper.self, from: Data(#"{"asrEngine":"parakeet"}"#.utf8))
+        #expect(w.asrEngine == .parakeet)
+    }
+
+    /// store.json written by a build that still offered the experimental
+    /// Qwen3 engine must not fail to decode — it falls back to the default.
+    @Test func retiredQwen3ValueFallsBackToParakeet() throws {
+        let w = try JSONDecoder().decode(Wrapper.self, from: Data(#"{"asrEngine":"qwen3"}"#.utf8))
+        #expect(w.asrEngine == .parakeet)
+    }
+
+    @Test func missingValueStaysNil() throws {
+        let w = try JSONDecoder().decode(Wrapper.self, from: Data(#"{}"#.utf8))
+        #expect(w.asrEngine == nil)
+    }
+}

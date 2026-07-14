@@ -69,10 +69,25 @@ public final class MeetingSummarizer {
     /// smaller context window than the MLX backends' prefill budget. Longer
     /// transcripts are split at turn boundaries and summarized in sections.
     let transcriptCharBudget: Int
+    /// True for the MLX backends: cap MLX's freed-buffer cache while loaded
+    /// and drop it after each summarize pass. Without this, a long meeting's
+    /// section passes grow the cache by gigabytes — on iPhone that ends in a
+    /// jetsam kill (same failure MeetingPipeline.process guards against).
+    private let managesGPUCache: Bool
 
-    public init(chat: any SummaryChat, transcriptCharBudget: Int = 20_000) {
+    public init(chat: any SummaryChat, transcriptCharBudget: Int = 20_000,
+                managesGPUCache: Bool = false) {
         self.chat = chat
         self.transcriptCharBudget = transcriptCharBudget
+        self.managesGPUCache = managesGPUCache
+        if managesGPUCache {
+            Qwen35MLXChat.setGPUCacheLimit(MeetingPipeline.gpuCacheLimit)
+        }
+    }
+
+    /// Release recyclable GPU buffers after a pass; the next pass re-warms.
+    private func drainGPUCache() {
+        if managesGPUCache { Qwen35MLXChat.clearGPUCache() }
     }
 
     /// Which summarization backend to load: an on-device MLX LLM family, or
@@ -165,7 +180,8 @@ public final class MeetingSummarizer {
             #endif
         }
         return MeetingSummarizer(
-            chat: chat, transcriptCharBudget: transcriptCharBudget ?? defaultBudget)
+            chat: chat, transcriptCharBudget: transcriptCharBudget ?? defaultBudget,
+            managesGPUCache: backend != .appleIntelligence)
     }
 
     /// Produce a headline + markdown overview. The caller stamps `generatedAt`.
@@ -181,6 +197,7 @@ public final class MeetingSummarizer {
         // content. Decided in code, not prompt.
         if Self.isEmpty(transcript) { return Self.emptyResult }
         if Self.isTooThin(transcript) { return Self.thinResult }
+        defer { drainGPUCache() }
         if Self.turnLines(transcript.turns).count > transcriptCharBudget {
             return try await summarizeInSections(transcript, context: context)
         }
@@ -319,6 +336,7 @@ public final class MeetingSummarizer {
     /// follows one focused rewrite instruction far better than a format clause
     /// buried in the main summarization prompt.
     nonisolated(nonsending) public func refineLabel(headline: String, overview: String) async throws -> String {
+        defer { drainGPUCache() }
         var sampling = ChatSamplingConfig.default
         sampling.temperature = 0.0
         // Generous budget: the pipeline may spend tokens on a stripped

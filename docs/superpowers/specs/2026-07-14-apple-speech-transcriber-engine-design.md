@@ -59,29 +59,41 @@ slicing transcribes each speaker's overlap region from that speaker's own audio.
   `(Double, String)` handler the other engines use), and throws
   `AppleSpeechError.unavailable(reason:)` if the OS, locale, or asset can't
   satisfy the request.
-- **`static var isSupported: Bool`** — cheap runtime gate (OS version + locale
-  in `supportedLocales`) usable from the app without loading anything.
+- **Support gating is two-stage:** the cheap sync gate is the OS version alone
+  (`#available`, via `ASREngine.resolvedDefault()`), because the locale check
+  (`supportedLocale(equivalentTo:)`) is async. Locale and asset failures
+  surface as thrown errors at load time and are handled by the app-level
+  fallback.
 
 ### `ASREngine` (existing, `MeetingPipeline.swift`)
 
-New case `appleSpeech`. `MeetingPipeline.load(engine:)` gains the branch; on
-`AppleSpeechError` it **falls back to `.parakeet`** rather than failing the
-meeting — processing must never be blocked by the new path. The pipeline
-resolution reports which engine actually loaded so the UI can show it.
+New case `appleSpeech`. `MeetingPipeline.load(engine:)` gains the branch and
+**throws** on failure (an explicit request for an unavailable engine is an
+error — this keeps the CLI strict). The **fallback to `.parakeet` lives in the
+app's `PipelineService.ensureLoaded`**, so processing is never blocked by the
+new path; it emits a progress-stage message naming the fallback.
 
-A static helper `ASREngine.resolvedDefault` returns `.appleSpeech` when
-`AppleSpeechTranscriber.isSupported`, else `.parakeet`.
+A static helper `ASREngine.resolvedDefault()` returns `.appleSpeech` when the
+OS supports it (`#available` gate only — see above), else `.parakeet`.
 
 ### App (`App/Sources/`)
 
-- `Store.asrEngine`'s property initializer and `load()`'s decode fallback both
-  change from `.parakeet` to `ASREngine.resolvedDefault`, so new installs (and
-  pre-field stores) default to Apple on supported devices. **Limitation:** the
-  app persists `asrEngine` unconditionally on every save, so existing installs
-  all have `"parakeet"` on disk regardless of whether the user ever touched the
-  picker — a persisted value is indistinguishable from an explicit choice and is
-  preserved. Existing users get the new engine by selecting it in settings; we
-  do not migrate them automatically.
+- **Correction found while planning:** no released build has an engine picker —
+  `Store.asrEngine` is persisted but nothing in the UI ever sets it, so every
+  persisted `"parakeet"` is a default, not a choice. That removes the migration
+  ambiguity: existing users can be auto-upgraded safely.
+- `Store` replaces the stored `asrEngine` with `asrEngineChoice: ASREngine?`
+  where `nil` means *automatic* (resolve via `ASREngine.resolvedDefault()` at
+  use time) and non-nil is an explicit user choice from the new picker. A
+  computed `asrEngine` keeps call sites (`SessionProcessing`) unchanged.
+- Persistence: new optional key `asrEngineChoice` in `Persisted`; the legacy
+  `asrEngine` key is still read (only a hand-set `"qwen3"` is honored as a
+  choice; `"parakeet"` maps to automatic) and no longer written. Older builds
+  ignore the unknown `asrEngineChoice` key and see a missing `asrEngine` key,
+  decoding to `.parakeet` — downgrades are safe even when the choice is
+  `appleSpeech`.
+- A new "Transcription" section in the settings screen (`MyVoiceView`), shown
+  only on iOS 26+, offers Automatic (recommended) / Apple / Luxicon (Parakeet).
 - The engine picker in settings shows "Apple (system)" only when
   `AppleSpeechTranscriber.isSupported`.
 - `PipelineService` passes the engine through unchanged; if the pipeline fell
@@ -111,12 +123,12 @@ out-of-process engine) → vocabulary near-miss correction → enrollment naming
 
 ## Persistence back-compat
 
-`Persisted.asrEngine` is already `ASREngine?` with a `?? .parakeet` fallback, so
-current builds are unaffected. A store.json containing `"appleSpeech"` decoded
-by an *older* build would throw during `Persisted` decode and trip the
-corrupt-store set-aside path. This is the same exposure `SummaryEngine` cases
-already have, downgrade installs are not a supported path, and the set-aside is
-non-destructive — accepted, not mitigated, in v1.
+The engine choice moves to a *new* optional key (`asrEngineChoice`), and the
+legacy `asrEngine` key is no longer written. Older builds ignore unknown keys
+and decode a missing `asrEngine` as `.parakeet`, so a store.json written by the
+new build — including one with `"appleSpeech"` selected — decodes cleanly on
+older builds. This is strictly safer than reusing the legacy key, whose decoder
+would throw on an unknown raw value and trip the corrupt-store set-aside path.
 
 ## Testing & verification
 

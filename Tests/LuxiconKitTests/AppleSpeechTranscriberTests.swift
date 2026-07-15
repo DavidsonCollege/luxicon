@@ -17,6 +17,15 @@ import AVFoundation
     }
 
     @available(iOS 26.0, macOS 26.0, *)
+    @Test func pcmBufferHandlesEmptyInput() throws {
+        let buffer = try AppleSpeechTranscriber.pcmBuffer(
+            from: [], sampleRate: 16000, converting: nil)
+        #expect(buffer.frameLength == 0)
+        #expect(buffer.format.sampleRate == 16000)
+        #expect(buffer.format.channelCount == 1)
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
     @Test func pcmBufferConvertsSampleRate() throws {
         // 1 s of signal at 16 kHz converts to ~32000 frames at 32 kHz —
         // same duration, double the frame count.

@@ -34,6 +34,13 @@ public final class AppleSpeechTranscriber: TurnTranscriber {
         self.analyzerFormat = analyzerFormat
     }
 
+    /// Single place for the module configuration: plain transcription, no
+    /// volatile/alternative reporting, no attribute decoration.
+    private static func makeTranscriber(locale: Locale) -> SpeechTranscriber {
+        SpeechTranscriber(
+            locale: locale, transcriptionOptions: [], reportingOptions: [], attributeOptions: [])
+    }
+
     /// Resolve the locale, install the system model asset if needed, and
     /// verify an audio format. Mirrors the other engines' `fromPretrained`
     /// contract (progress in 0...1 with a stage string).
@@ -43,8 +50,7 @@ public final class AppleSpeechTranscriber: TurnTranscriber {
         guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: .current) else {
             throw LoadError.unsupportedLocale(.current)
         }
-        let transcriber = SpeechTranscriber(
-            locale: locale, transcriptionOptions: [], reportingOptions: [], attributeOptions: [])
+        let transcriber = makeTranscriber(locale: locale)
         if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
             progress?(0.1, "Downloading system speech model…")
             try await request.downloadAndInstall()
@@ -60,12 +66,23 @@ public final class AppleSpeechTranscriber: TurnTranscriber {
 
     public var supportsContext: Bool { true }
 
-    /// Synchronous bridge over the async SpeechAnalyzer session. `process`
-    /// already runs on a background task, so blocking this thread is the
-    /// same contract the CoreML/MLX engines have.
+    /// Upper bound on one turn's analysis. Turns arrive pre-chunked at
+    /// ≤ ~61 s of audio and Apple's transcriber runs faster than realtime,
+    /// so hitting this means the analyzer session is starved or hung.
+    private static let turnTimeout: TimeInterval = 180
+
+    /// Synchronous bridge over the async SpeechAnalyzer session.
+    ///
+    /// Caution: this blocks a Swift-concurrency cooperative-pool thread while
+    /// an unstructured `Task` on that same pool must make progress to signal —
+    /// a starvation hazard the CoreML/MLX engines don't have (they block on
+    /// compute that progresses on its own). The bounded wait converts a
+    /// starved or hung analyzer session into a skipped (empty) turn instead
+    /// of a permanent hang.
     public func transcribeTurn(
         _ audio: [Float], sampleRate: Int, context: [String]?
     ) -> TranscriptionResult {
+        guard !audio.isEmpty else { return TranscriptionResult(text: "") }
         let semaphore = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var result = TranscriptionResult(text: "")
         let work = Task { [locale, analyzerFormat] in
@@ -80,8 +97,11 @@ public final class AppleSpeechTranscriber: TurnTranscriber {
                 result = TranscriptionResult(text: "")
             }
         }
-        semaphore.wait()
-        _ = work
+        guard semaphore.wait(timeout: .now() + Self.turnTimeout) == .success else {
+            work.cancel()
+            // Per-turn failure → empty text; process() skips empty turns.
+            return TranscriptionResult(text: "")
+        }
         return result
     }
 
@@ -92,8 +112,7 @@ public final class AppleSpeechTranscriber: TurnTranscriber {
         audio: [Float], sampleRate: Int, locale: Locale,
         format: AVAudioFormat, terms: [String]
     ) async throws -> String {
-        let transcriber = SpeechTranscriber(
-            locale: locale, transcriptionOptions: [], reportingOptions: [], attributeOptions: [])
+        let transcriber = makeTranscriber(locale: locale)
         let analyzer = SpeechAnalyzer(modules: [transcriber])
         if !terms.isEmpty {
             let context = AnalysisContext()
@@ -138,8 +157,12 @@ public final class AppleSpeechTranscriber: TurnTranscriber {
             throw LoadError.noCompatibleAudioFormat
         }
         native.frameLength = AVAudioFrameCount(samples.count)
-        samples.withUnsafeBufferPointer { src in
-            native.floatChannelData![0].update(from: src.baseAddress!, count: samples.count)
+        // An empty array's buffer pointer may have a nil baseAddress; skip the
+        // copy entirely rather than force-unwrap it.
+        if !samples.isEmpty {
+            samples.withUnsafeBufferPointer { src in
+                native.floatChannelData![0].update(from: src.baseAddress!, count: samples.count)
+            }
         }
         guard let target, target != nativeFormat else { return native }
 

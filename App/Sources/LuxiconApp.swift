@@ -3,12 +3,20 @@ import SwiftUI
 @main
 struct LuxiconApp: App {
     @State private var store = Store()
+    // The -route check keeps first-launch onboarding from blocking debug
+    // screenshot automation (see PeopleListView.handleRouteArgument).
+    @State private var showOnboarding =
+        !UserDefaults.standard.bool(forKey: OnboardingView.seenKey)
+        && !ProcessInfo.processInfo.arguments.contains("-route")
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             PeopleListView()
                 .environment(store)
+                .fullScreenCover(isPresented: $showOnboarding) {
+                    OnboardingView()
+                }
         }
         .onChange(of: scenePhase) { _, phase in
             // GPU inference in a backgrounded app is killed by iOS; cancel

@@ -11,6 +11,8 @@ struct PeopleListView: View {
     @State private var importingPeople = false
     @State private var importResult: String?
     @State private var showingAboutGiving = false
+    @State private var showingWelcomeTour = false
+    @State private var welcomeTourPage = 0
 
     var body: some View {
         @Bindable var coordinator = NavigationCoordinator.shared
@@ -128,6 +130,13 @@ struct PeopleListView: View {
                         ShareLink(item: PeopleJSON.agentPrompt(existing: store.peopleForExport, me: store.meForExport)) {
                             Label("Share Agent Prompt", systemImage: "sparkles")
                         }
+                        Divider()
+                        Button {
+                            welcomeTourPage = 0
+                            showingWelcomeTour = true
+                        } label: {
+                            Label("Welcome Tour", systemImage: "hand.wave")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
@@ -177,6 +186,9 @@ struct PeopleListView: View {
             .sheet(isPresented: $showingAboutGiving) {
                 AboutGivingView()
             }
+            .fullScreenCover(isPresented: $showingWelcomeTour) {
+                OnboardingView(initialPage: welcomeTourPage)
+            }
             .onOpenURL { coordinator.handle(url: $0) }
         }
     }
@@ -203,6 +215,10 @@ struct PeopleListView: View {
         switch parts.first {
         case "myvoice":
             path = [.myVoice]
+        case "onboarding":
+            // "onboarding" or "onboarding:<page>" — screenshot automation.
+            welcomeTourPage = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
+            showingWelcomeTour = true
         case "person":
             if let id = parts.last.flatMap(UUID.init(uuidString:)),
                let person = store.person(id: id) {

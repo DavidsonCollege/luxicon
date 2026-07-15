@@ -25,6 +25,8 @@ install .build/release/luxicon-mcp "$STAGE/root/usr/local/bin/luxicon-mcp"
 install -m 755 packaging/uninstall.sh "$STAGE/root/usr/local/bin/luxicon-listener-uninstall"
 install -m 644 packaging/edu.davidson.luxicon.listener.plist "$STAGE/root/Library/LaunchAgents/"
 install -m 755 packaging/postinstall "$STAGE/scripts/postinstall"
+mkdir -p "$STAGE/root/usr/local/share/luxicon"
+install -m 644 THIRD-PARTY-NOTICES.md "$STAGE/root/usr/local/share/luxicon/THIRD-PARTY-NOTICES.md"
 
 if [ -n "${LUXICON_SIGN_IDENTITY:-}" ]; then
     echo "==> Signing binary as: $LUXICON_SIGN_IDENTITY"

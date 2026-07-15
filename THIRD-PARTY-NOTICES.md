@@ -19,7 +19,7 @@ Downloaded from Hugging Face on first use, run entirely on-device:
 ### async-http-client 1.35.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2017-2021 The AsyncHTTPClient Project
 - <https://github.com/swift-server/async-http-client>
 
 Upstream NOTICE file:
@@ -92,7 +92,6 @@ This product contains a derivation of Fabian Fett's 'Base64.swift'.
 ### compress-nio 1.4.2
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
 - <https://github.com/adam-fowler/compress-nio>
 
 ### eventsource 1.4.1
@@ -104,7 +103,7 @@ This product contains a derivation of Fabian Fett's 'Base64.swift'.
 ### hummingbird 2.16.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2024 The Hummingbird Project
 - <https://github.com/hummingbird-project/hummingbird>
 
 Upstream NOTICE file:
@@ -144,7 +143,6 @@ This product contains code from swift-foundation.
 ### hummingbird-websocket 2.6.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
 - <https://github.com/hummingbird-project/hummingbird-websocket>
 
 ### mlx-swift 0.31.6
@@ -156,25 +154,23 @@ This product contains code from swift-foundation.
 ### speech-swift e403d0bdd5e1
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2025 Ivan Digital
 - <https://github.com/soniqo/speech-swift>
 
 ### swift-algorithms 1.2.1
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
 - <https://github.com/apple/swift-algorithms>
 
 ### swift-argument-parser 1.8.2
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
 - <https://github.com/apple/swift-argument-parser>
 
 ### swift-asn1 1.7.1
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2022 The SwiftASN1 Project
 - <https://github.com/apple/swift-asn1>
 
 Upstream NOTICE file:
@@ -228,19 +224,17 @@ This product contains derivations of various scripts from Swift OpenAPI Generato
 ### swift-async-algorithms 1.1.5
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
 - <https://github.com/apple/swift-async-algorithms>
 
 ### swift-atomics 1.3.1
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
 - <https://github.com/apple/swift-atomics>
 
 ### swift-certificates 1.19.3
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2022 The SwiftCertificates Project
 - <https://github.com/apple/swift-certificates>
 
 Upstream NOTICE file:
@@ -339,13 +333,12 @@ This product contains derivations of various scripts from Swift OpenAPI Generato
 ### swift-collections 1.6.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
 - <https://github.com/apple/swift-collections>
 
 ### swift-configuration 1.2.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2025 The SwiftConfiguration Project
 - <https://github.com/apple/swift-configuration>
 
 Upstream NOTICE file:
@@ -401,7 +394,7 @@ This repository contains a modified copy of the test-examples.sh script the appl
 ### swift-crypto 4.5.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2019 The SwiftCrypto Project
 - <https://github.com/apple/swift-crypto>
 
 Upstream NOTICE file:
@@ -454,19 +447,17 @@ This product contains a derivation of various files from SwiftNIO.
 ### swift-distributed-tracing 1.4.1
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
 - <https://github.com/apple/swift-distributed-tracing>
 
 ### swift-http-structured-headers 1.7.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
 - <https://github.com/apple/swift-http-structured-headers>
 
 ### swift-http-types 1.6.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2023 The Swift HTTP Types Project
 - <https://github.com/apple/swift-http-types>
 
 Upstream NOTICE file:
@@ -511,19 +502,19 @@ This product contains a derivation of various scripts from SwiftNIO.
 ### swift-huggingface 0.9.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2025 Hugging Face SAS.
 - <https://github.com/huggingface/swift-huggingface>
 
 ### swift-jinja 2.4.1
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2022 Hugging Face SAS.
 - <https://github.com/huggingface/swift-jinja>
 
 ### swift-log 1.14.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2018, 2019 The SwiftLog Project
 - <https://github.com/apple/swift-log>
 
 Upstream NOTICE file:
@@ -569,7 +560,7 @@ scripts from SwiftNIO.
 ### swift-metrics 2.11.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2018, 2019 The SwiftMetrics Project
 - <https://github.com/apple/swift-metrics>
 
 Upstream NOTICE file:
@@ -614,7 +605,7 @@ This product contains a derivation of the lock implementation and various script
 ### swift-nio 2.101.2
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2017, 2018 The SwiftNIO Project
 - <https://github.com/apple/swift-nio>
 
 Upstream NOTICE file:
@@ -731,7 +722,7 @@ This product contains a derivation of "TokenBucket.swift" from Swift Package Man
 ### swift-nio-extras 1.34.3
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2017, 2018 The SwiftNIO Project
 - <https://github.com/apple/swift-nio-extras>
 
 Upstream NOTICE file:
@@ -796,7 +787,7 @@ This product contains a vendored copy of zlib with symbols prefixed as "cnioextr
 ### swift-nio-http2 1.44.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2017, 2018 The SwiftNIO Project
 - <https://github.com/apple/swift-nio-http2>
 
 Upstream NOTICE file:
@@ -877,7 +868,7 @@ This product contains a graceful shutdown connection manager derived from gRPC S
 ### swift-nio-ssl 2.37.1
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2017, 2018 The SwiftNIO Project
 - <https://github.com/apple/swift-nio-ssl>
 
 Upstream NOTICE file:
@@ -949,25 +940,23 @@ This product contains code from boringssl.
 ### swift-nio-transport-services 1.28.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
 - <https://github.com/apple/swift-nio-transport-services>
 
 ### swift-numerics 1.1.1
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
 - <https://github.com/apple/swift-numerics>
 
 ### swift-sdk 0.12.1
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright (c) 2024-2025 Model Context Protocol a Series of LF Projects, LLC.
 - <https://github.com/modelcontextprotocol/swift-sdk>
 
 ### swift-service-context 1.3.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2024 The Swift Service Context Project
 - <https://github.com/apple/swift-service-context>
 
 Upstream NOTICE file:
@@ -1012,7 +1001,7 @@ This product contains derivations of benchmarking code from Swift Distributed Tr
 ### swift-service-lifecycle 2.11.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2019-2023 The ServiceLifecycle Project
 - <https://github.com/swift-server/swift-service-lifecycle>
 
 Upstream NOTICE file:
@@ -1068,19 +1057,18 @@ This product uses swift-async-algorithms.
 ### swift-system 1.7.4
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
 - <https://github.com/apple/swift-system>
 
 ### swift-transformers 1.3.3
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2022 Hugging Face SAS.
 - <https://github.com/huggingface/swift-transformers>
 
 ### swift-websocket 1.5.0
 
 - License: Apache-2.0
-- 2. Grant of Copyright License. Subject to the terms and conditions of
+- Copyright 2024-2026 The Hummingbird Project
 - <https://github.com/hummingbird-project/swift-websocket>
 
 Upstream NOTICE file:

@@ -5,14 +5,14 @@
       "version": "1.35.0",
       "license": "Apache-2.0",
       "url": "https://github.com/swift-server/async-http-client",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2017-2021 The AsyncHTTPClient Project"
     },
     {
       "name": "compress-nio",
       "version": "1.4.2",
       "license": "Apache-2.0",
       "url": "https://github.com/adam-fowler/compress-nio",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": null
     },
     {
       "name": "eventsource",
@@ -26,14 +26,14 @@
       "version": "2.16.0",
       "license": "Apache-2.0",
       "url": "https://github.com/hummingbird-project/hummingbird",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2024 The Hummingbird Project"
     },
     {
       "name": "hummingbird-websocket",
       "version": "2.6.0",
       "license": "Apache-2.0",
       "url": "https://github.com/hummingbird-project/hummingbird-websocket",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": null
     },
     {
       "name": "mlx-swift",
@@ -47,203 +47,203 @@
       "version": "e403d0bdd5e1",
       "license": "Apache-2.0",
       "url": "https://github.com/soniqo/speech-swift",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2025 Ivan Digital"
     },
     {
       "name": "swift-algorithms",
       "version": "1.2.1",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-algorithms",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": null
     },
     {
       "name": "swift-argument-parser",
       "version": "1.8.2",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-argument-parser",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": null
     },
     {
       "name": "swift-asn1",
       "version": "1.7.1",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-asn1",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2022 The SwiftASN1 Project"
     },
     {
       "name": "swift-async-algorithms",
       "version": "1.1.5",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-async-algorithms",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": null
     },
     {
       "name": "swift-atomics",
       "version": "1.3.1",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-atomics",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": null
     },
     {
       "name": "swift-certificates",
       "version": "1.19.3",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-certificates",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2022 The SwiftCertificates Project"
     },
     {
       "name": "swift-collections",
       "version": "1.6.0",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-collections",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": null
     },
     {
       "name": "swift-configuration",
       "version": "1.2.0",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-configuration",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2025 The SwiftConfiguration Project"
     },
     {
       "name": "swift-crypto",
       "version": "4.5.0",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-crypto",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2019 The SwiftCrypto Project"
     },
     {
       "name": "swift-distributed-tracing",
       "version": "1.4.1",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-distributed-tracing",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": null
     },
     {
       "name": "swift-http-structured-headers",
       "version": "1.7.0",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-http-structured-headers",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": null
     },
     {
       "name": "swift-http-types",
       "version": "1.6.0",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-http-types",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2023 The Swift HTTP Types Project"
     },
     {
       "name": "swift-huggingface",
       "version": "0.9.0",
       "license": "Apache-2.0",
       "url": "https://github.com/huggingface/swift-huggingface",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2025 Hugging Face SAS."
     },
     {
       "name": "swift-jinja",
       "version": "2.4.1",
       "license": "Apache-2.0",
       "url": "https://github.com/huggingface/swift-jinja",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2022 Hugging Face SAS."
     },
     {
       "name": "swift-log",
       "version": "1.14.0",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-log",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2018, 2019 The SwiftLog Project"
     },
     {
       "name": "swift-metrics",
       "version": "2.11.0",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-metrics",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2018, 2019 The SwiftMetrics Project"
     },
     {
       "name": "swift-nio",
       "version": "2.101.2",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-nio",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2017, 2018 The SwiftNIO Project"
     },
     {
       "name": "swift-nio-extras",
       "version": "1.34.3",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-nio-extras",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2017, 2018 The SwiftNIO Project"
     },
     {
       "name": "swift-nio-http2",
       "version": "1.44.0",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-nio-http2",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2017, 2018 The SwiftNIO Project"
     },
     {
       "name": "swift-nio-ssl",
       "version": "2.37.1",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-nio-ssl",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2017, 2018 The SwiftNIO Project"
     },
     {
       "name": "swift-nio-transport-services",
       "version": "1.28.0",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-nio-transport-services",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": null
     },
     {
       "name": "swift-numerics",
       "version": "1.1.1",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-numerics",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": null
     },
     {
       "name": "swift-sdk",
       "version": "0.12.1",
       "license": "Apache-2.0",
       "url": "https://github.com/modelcontextprotocol/swift-sdk",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright (c) 2024-2025 Model Context Protocol a Series of LF Projects, LLC."
     },
     {
       "name": "swift-service-context",
       "version": "1.3.0",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-service-context",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2024 The Swift Service Context Project"
     },
     {
       "name": "swift-service-lifecycle",
       "version": "2.11.0",
       "license": "Apache-2.0",
       "url": "https://github.com/swift-server/swift-service-lifecycle",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2019-2023 The ServiceLifecycle Project"
     },
     {
       "name": "swift-system",
       "version": "1.7.4",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-system",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": null
     },
     {
       "name": "swift-transformers",
       "version": "1.3.3",
       "license": "Apache-2.0",
       "url": "https://github.com/huggingface/swift-transformers",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2022 Hugging Face SAS."
     },
     {
       "name": "swift-websocket",
       "version": "1.5.0",
       "license": "Apache-2.0",
       "url": "https://github.com/hummingbird-project/swift-websocket",
-      "copyright": "2. Grant of Copyright License. Subject to the terms and conditions of"
+      "copyright": "Copyright 2024-2026 The Hummingbird Project"
     },
     {
       "name": "whisperkit",

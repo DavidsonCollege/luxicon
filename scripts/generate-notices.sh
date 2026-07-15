@@ -42,7 +42,7 @@ if [ "$unresolved" -ne 0 ]; then
 fi
 
 python3 - "$TMP" <<'PY'
-import base64, json, pathlib, sys
+import base64, json, pathlib, re, sys
 
 tmp = pathlib.Path(sys.argv[1])
 pins = [l.split("\t") for l in (tmp / "pins.tsv").read_text().splitlines()]
@@ -69,13 +69,19 @@ for identity, url, version in pins:
     spdx = (info.get("license") or {}).get("spdx_id") or "UNKNOWN"
     spdx = OVERRIDES.get(identity, spdx)
     text = base64.b64decode(info["content"]).decode("utf-8", "replace")
-    cop = next((l.strip() for l in text.splitlines()
-                if "copyright" in l.lower() and any(c.isdigit() for c in l)), None)
     notice_file = tmp / f"{identity}.notice"
+    notice_text = notice_file.read_text() if notice_file.exists() else None
+
+    def find_copyright(s):
+        return next((l.strip() for l in s.splitlines()
+                     if re.search(r"copyright\s+(\(c\)|©|\d{4})", l, re.I)
+                     and "grant of copyright" not in l.lower()), None)
+
+    cop = (find_copyright(notice_text) if notice_text else None) or find_copyright(text)
     entries.append({
         "name": identity, "version": version, "license": spdx, "url": url,
         "copyright": cop,
-        "notice": notice_file.read_text() if notice_file.exists() else None,
+        "notice": notice_text,
         "text": text,
     })
 

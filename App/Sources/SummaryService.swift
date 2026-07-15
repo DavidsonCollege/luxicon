@@ -41,7 +41,10 @@ actor SummaryService {
         try await loadModel(progress: progress)
         progress("Summarizing…")
         try Task.checkCancellation()
-        let result = try await summarizer!.summarize(transcript, context: context)
+        // loadModel guarantees a summarizer unless the feature was switched
+        // off between the await and here — treat that race as a cancellation.
+        guard let summarizer else { throw CancellationError() }
+        let result = try await summarizer.summarize(transcript, context: context)
         return (
             listLabel: result.headline,
             summary: SessionSummary(overview: result.overview, generatedAt: Date())
@@ -178,7 +181,7 @@ extension Store {
             return "Summaries require Apple Intelligence, which isn't available "
                 + "on this device. Export the transcript to summarize it with "
                 + "another AI assistant."
-        case .noModelDirectory, nil:
+        case nil:
             return "Summarization failed: \(error.localizedDescription)"
         }
     }

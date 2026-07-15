@@ -66,15 +66,15 @@ public struct StructuredSummary: Sendable {
     }
 }
 
-/// Background knowledge about a meeting participant, injected into the
-/// summarization prompt at call time — never persisted with the transcript,
-/// so editing context improves the next regeneration.
 /// One display block of a summary overview — see `MeetingSummarizer.overviewBlocks`.
 public enum SummaryOverviewBlock: Equatable, Sendable {
     case paragraph(String)
     case bullet(level: Int, text: String)
 }
 
+/// Background knowledge about a meeting participant, injected into the
+/// summarization prompt at call time — never persisted with the transcript,
+/// so editing context improves the next regeneration.
 public struct SummaryParticipant: Sendable, Equatable {
     public var name: String
     public var context: String
@@ -326,9 +326,8 @@ public final class MeetingSummarizer {
     nonisolated(nonsending) public func refineLabel(headline: String, overview: String) async throws -> String {
         var sampling = ChatSamplingConfig.default
         sampling.temperature = 0.0
-        // Generous budget: the pipeline may spend tokens on a stripped
-        // <think> block before the visible label; too small a cap yields an
-        // empty answer (and a silent fallback to the unrefined headline).
+        // Generous budget: a too-small cap yields an empty answer (and a
+        // silent fallback to the unrefined headline).
         sampling.maxTokens = 256
         let raw = try await chat.generate(
             messages: [

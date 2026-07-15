@@ -26,8 +26,6 @@ enum SummaryEngine: String, Codable {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = SummaryEngine(rawValue: raw) ?? .appleIntelligence
     }
-
-    var displayName: String { "Apple Intelligence" }
 }
 
 /// One recorded 1-on-1.

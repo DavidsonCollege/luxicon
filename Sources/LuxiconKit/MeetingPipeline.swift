@@ -53,7 +53,8 @@ public enum ASREngine: String, Codable, Sendable {
     }
 }
 
-/// Load-time engine failure; the app catches it to fall back to Parakeet.
+/// Load-time engine failure, surfaced to the user via `LocalizedError`
+/// (the app treats any appleSpeech load failure as "fall back to Parakeet").
 public struct EngineUnavailableError: Error, LocalizedError {
     public let reason: String
     public init(reason: String) { self.reason = reason }
@@ -181,7 +182,8 @@ public final class MeetingPipeline {
         // ~3 embedding forward passes per 10 s window, each with a unique
         // input length — so on long recordings the cache only ever grows
         // (a 45-minute meeting reached iOS's ~6 GB per-process limit and was
-        // jetsam-killed). Cap the cache for the run and drop it afterwards.
+        // jetsam-killed). Ratchet the process-wide cap down (min() never
+        // raises it back) and drop the cache contents when the run ends.
         MLX.Memory.cacheLimit = min(MLX.Memory.cacheLimit, Self.gpuCacheLimit)
         defer { MLX.Memory.clearCache() }
 

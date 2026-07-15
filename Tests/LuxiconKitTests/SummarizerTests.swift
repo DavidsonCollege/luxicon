@@ -41,7 +41,7 @@ final class MockChat: SummaryChat {
 
     @Test func summarizeRunsOverAnyBackend() async throws {
         // The summarizer must work over the SummaryChat protocol, not a
-        // concrete model class — Qwen and Gemma backends are interchangeable.
+        // concrete model class — any backend slots in behind it.
         let mock = MockChat(replies: ["HEADLINE: Budget, hiring\nSUMMARY:\n**Overview** — Discussed budget."])
         let summarizer = MeetingSummarizer(chat: mock)
         let result = try await summarizer.summarize(transcript(

@@ -94,8 +94,18 @@ struct AcknowledgementsView: View {
 
 /// Full contents of the bundled THIRD-PARTY-NOTICES.md, pushed from the
 /// packages section so the App Store binary carries the complete license
-/// and NOTICE texts, not just name/version/license-id.
+/// and NOTICE texts, not just name/version/license-id. SwiftUI's Text
+/// markdown is inline-only (same reason SummaryOverviewText exists), so the
+/// document is split into heading/bullet/code/paragraph blocks and laid out
+/// here; inline markdown (bold, links) still renders within each block.
 private struct LicenseTextsView: View {
+    private enum Block {
+        case heading(Int, String)
+        case bullet(String)
+        case code(String)
+        case paragraph(String)
+    }
+
     private static let noticesText: String = {
         guard let url = Bundle.main.url(forResource: "THIRD-PARTY-NOTICES",
                                         withExtension: "md"),
@@ -105,14 +115,91 @@ private struct LicenseTextsView: View {
         return text
     }()
 
+    private static let blocks: [Block] = {
+        var blocks: [Block] = []
+        var paragraph: [String] = []
+        var code: [String] = []
+        var inCode = false
+        func flushParagraph() {
+            guard !paragraph.isEmpty else { return }
+            blocks.append(.paragraph(paragraph.joined(separator: " ")))
+            paragraph = []
+        }
+        for line in noticesText.components(separatedBy: "\n") {
+            if inCode {
+                if line.hasPrefix("```") {
+                    blocks.append(.code(code.joined(separator: "\n")))
+                    code = []
+                    inCode = false
+                } else {
+                    code.append(line)
+                }
+                continue
+            }
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("```") {
+                flushParagraph()
+                inCode = true
+            } else if trimmed.isEmpty {
+                flushParagraph()
+            } else if trimmed.hasPrefix("### ") {
+                flushParagraph()
+                blocks.append(.heading(3, String(trimmed.dropFirst(4))))
+            } else if trimmed.hasPrefix("## ") {
+                flushParagraph()
+                blocks.append(.heading(2, String(trimmed.dropFirst(3))))
+            } else if trimmed.hasPrefix("# ") {
+                flushParagraph()
+                blocks.append(.heading(1, String(trimmed.dropFirst(2))))
+            } else if trimmed.hasPrefix("- ") {
+                flushParagraph()
+                blocks.append(.bullet(String(trimmed.dropFirst(2))))
+            } else {
+                paragraph.append(trimmed)
+            }
+        }
+        if inCode, !code.isEmpty { blocks.append(.code(code.joined(separator: "\n"))) }
+        flushParagraph()
+        return blocks
+    }()
+
     var body: some View {
         ScrollView {
-            Text(Self.noticesText)
-                .font(.caption.monospaced())
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
+            LazyVStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(Self.blocks.enumerated()), id: \.offset) { _, block in
+                    blockView(block)
+                }
+            }
+            .padding()
         }
         .navigationTitle("License Texts")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    @ViewBuilder
+    private func blockView(_ block: Block) -> some View {
+        switch block {
+        case .heading(let level, let text):
+            Text(text)
+                .font(level == 1 ? .title3.bold()
+                      : level == 2 ? .headline
+                      : .subheadline.bold())
+                .padding(.top, level == 3 ? 4 : 10)
+        case .bullet(let text):
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("•").foregroundStyle(.secondary)
+                Text(LocalizedStringKey(text))
+            }
+            .font(.callout)
+        case .paragraph(let text):
+            Text(LocalizedStringKey(text))
+                .font(.callout)
+        case .code(let text):
+            Text(text)
+                .font(.caption.monospaced())
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+        }
     }
 }

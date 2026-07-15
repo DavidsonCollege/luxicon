@@ -20,8 +20,6 @@ public enum SummaryBackendError: Error, Equatable {
     /// The backend's content safety system refused the transcript
     /// (Apple Intelligence guardrails).
     case declined
-    /// The backend has no app-managed model directory (OS-owned weights).
-    case noModelDirectory
     /// Apple Intelligence can't run here; the status says why.
     case unavailable(AppleIntelligenceStatus)
 }

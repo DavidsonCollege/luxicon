@@ -120,7 +120,7 @@ fi
 # Also copy to test binary location so swift test can find it
 ARCH="$(uname -m)-apple-macosx"
 for CFG in debug release; do
-  for BUNDLE_NAME in Qwen3SpeechPackageTests Qwen3ASRPackageTests; do
+  for BUNDLE_NAME in LuxiconPackageTests; do
     TEST_BUNDLE_DIR="$BUILD_DIR/$ARCH/$CFG/$BUNDLE_NAME.xctest/Contents/MacOS"
     if [[ -d "$TEST_BUNDLE_DIR" ]]; then
       cp "$OUT_METALLIB" "$TEST_BUNDLE_DIR/mlx.metallib"

@@ -43,7 +43,7 @@ struct SessionDetailView: View {
                 Text(info?.stage ?? "Working…")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                Text("First run downloads the speech models (~700 MB).")
+                Text("First run may download speech models (up to ~700 MB).")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

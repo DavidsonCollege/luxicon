@@ -58,6 +58,25 @@ import Foundation
         #expect(TranscriptLibrary.parse(Data("nope".utf8), sourceFile: "x.json", folderName: nil).isEmpty)
     }
 
+    @Test func summaryWithUnknownShapeDoesNotHideTheSession() {
+        // A schema drift in SessionSummary (v1.0.0 shipped with a required
+        // `headline`; 6618b0a removed it) must degrade to summary-less, never
+        // to the session disappearing from every MCP tool.
+        struct AlienSummary: Encodable { let headline = "Topics" }  // no overview/generatedAt
+        struct Envelope: Encodable {
+            let schemaVersion = 1, kind = "one-on-one"
+            let transcript: MeetingTranscript
+            let summary: AlienSummary
+        }
+        let data = encode(Envelope(
+            transcript: transcript(title: "1-on-1 with Sam Rivera", day: 0),
+            summary: AlienSummary()))
+        let sessions = TranscriptLibrary.parse(data, sourceFile: "d.json", folderName: nil)
+        #expect(sessions.count == 1)
+        #expect(sessions[0].summary == nil)
+        #expect(sessions[0].person == "Sam Rivera")
+    }
+
     @Test func searchFindsTurnWithContextAndPersonFilter() {
         var library = TranscriptLibrary()
         library.sessions = TranscriptLibrary.parse(

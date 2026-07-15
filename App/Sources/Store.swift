@@ -26,8 +26,6 @@ enum SummaryEngine: String, Codable {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = SummaryEngine(rawValue: raw) ?? .appleIntelligence
     }
-
-    var displayName: String { "Apple Intelligence" }
 }
 
 /// One recorded 1-on-1.
@@ -83,8 +81,8 @@ final class Store {
     var asrEngineChoice: ASREngine?
     var asrEngine: ASREngine { asrEngineChoice ?? .resolvedDefault() }
     /// Master switch for the AI features (summaries, list labels, personal
-    /// context). Off by default: enabling requires an explicit opt-in that
-    /// downloads the ~2.5 GB on-device model. When off, the summary and
+    /// context). Off by default: enabling attaches to the Apple Intelligence
+    /// system model (OS-managed, no download). When off, the summary and
     /// context UI is hidden entirely.
     var aiSummariesEnabled = false
     /// Engine behind the summaries; nil until the user enables the feature.

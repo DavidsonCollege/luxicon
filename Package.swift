@@ -13,8 +13,9 @@ let package = Package(
         .executable(name: "luxicon-mcp", targets: ["LuxiconMCP"]),
     ],
     dependencies: [
-        // Pinned past v0.0.21 for Gemma4Chat (on main, unreleased). Exact SHA —
-        // move to a `from:` version once upstream tags a release containing it.
+        // Exact SHA past v0.0.21: the Parakeet streaming API this package
+        // uses postdates the last upstream tag. Move to `from:` once a
+        // release containing it is tagged.
         .package(url: "https://github.com/soniqo/speech-swift.git",
                  revision: "e403d0bdd5e134ddbca076ca9e75fd28761e69b1"),
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.0"),

@@ -142,7 +142,7 @@ final class Recorder: @unchecked Sendable {
             // Finalize failed (disk full?): the header still claims 0 samples.
             // Patch it from the file size so the captured audio survives.
             if let fileURL {
-                try? WAVFile.repairHeader(url: fileURL, sampleRate: Self.sampleRate)
+                _ = try? WAVFile.repairHeader(url: fileURL, sampleRate: Self.sampleRate)
             }
         }
         writer = nil
@@ -332,7 +332,12 @@ final class Recorder: @unchecked Sendable {
         let capacity = AVAudioFrameCount(Double(pcmBuffer.frameLength) * ratio) + 64
         guard let out = AVAudioPCMBuffer(pcmFormat: Self.targetFormat, frameCapacity: capacity) else { return }
 
-        var fed = false
+        // AVAudioConverterInputBlock is imported as @Sendable, but the
+        // converter invokes it synchronously and serially on this thread
+        // during this single `convert` call — never concurrently, never
+        // stored past it (same contract as AppleSpeechTranscriber.pcmBuffer).
+        nonisolated(unsafe) var fed = false
+        nonisolated(unsafe) let inputBuffer = pcmBuffer
         var error: NSError?
         converter.convert(to: out, error: &error) { _, status in
             if fed {
@@ -341,7 +346,7 @@ final class Recorder: @unchecked Sendable {
             }
             fed = true
             status.pointee = .haveData
-            return pcmBuffer
+            return inputBuffer
         }
         guard error == nil, out.frameLength > 0, let channel = out.floatChannelData?[0] else { return }
 

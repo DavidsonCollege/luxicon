@@ -41,7 +41,10 @@ actor SummaryService {
         try await loadModel(progress: progress)
         progress("Summarizing…")
         try Task.checkCancellation()
-        let result = try await summarizer!.summarize(transcript, context: context)
+        // loadModel guarantees a summarizer unless the feature was switched
+        // off between the await and here — treat that race as a cancellation.
+        guard let summarizer else { throw CancellationError() }
+        let result = try await summarizer.summarize(transcript, context: context)
         return (
             listLabel: result.headline,
             summary: SessionSummary(overview: result.overview, generatedAt: Date())
@@ -138,12 +141,21 @@ extension Store {
                 }
             } catch is CancellationError {
                 // Backgrounded: leave the session summary-less; the Generate
-                // Summary button remains available.
+                // Summary button remains available. The finished transcript
+                // still auto-pushes — the summary was the add-on, not the
+                // payload, and the Mac must not silently miss a session.
+                if let s = self.sessions.first(where: { $0.id == sessionId }) {
+                    self.autoPushIfEnabled(s)
+                }
             } catch {
                 // Real failures get a visible reason next to the Generate
                 // button (guardrail refusals especially must not look like
-                // the app silently doing nothing).
+                // the app silently doing nothing). The transcript still
+                // auto-pushes despite the failed summary.
                 processing.summarizeError[sessionId] = Self.summarizeErrorMessage(error)
+                if let s = self.sessions.first(where: { $0.id == sessionId }) {
+                    self.autoPushIfEnabled(s)
+                }
             }
             processing.summarizing[sessionId] = nil
             processing.tasks[sessionId] = nil
@@ -169,7 +181,7 @@ extension Store {
             return "Summaries require Apple Intelligence, which isn't available "
                 + "on this device. Export the transcript to summarize it with "
                 + "another AI assistant."
-        case .noModelDirectory, nil:
+        case nil:
             return "Summarization failed: \(error.localizedDescription)"
         }
     }

@@ -57,6 +57,17 @@ public struct TranscriptLibrary {
             let kind: String?
             let transcript: MeetingTranscript
             let summary: SessionSummary?
+
+            enum CodingKeys: String, CodingKey { case kind, transcript, summary }
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                kind = try c.decodeIfPresent(String.self, forKey: .kind)
+                transcript = try c.decode(MeetingTranscript.self, forKey: .transcript)
+                // Lenient: a summary from a different app version (schema
+                // drift) degrades to nil instead of hiding the whole session
+                // — the transcript is the payload, the summary an enrichment.
+                summary = try? c.decodeIfPresent(SessionSummary.self, forKey: .summary)
+            }
         }
         struct BundleEnvelope: Decodable {
             let kind: String?

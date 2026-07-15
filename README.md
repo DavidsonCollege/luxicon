@@ -25,16 +25,20 @@ Technology & Innovation team. If you like what you see, consider
 3. **Export** timestamped markdown (or structured JSON) with talk-time stats,
    ready to paste into Claude, ChatGPT, or your HR system's AI check-in notes.
 
-All inference runs on the Apple Neural Engine / GPU via
-[soniqo/speech-swift](https://github.com/soniqo/speech-swift):
+All on-device, via [soniqo/speech-swift](https://github.com/soniqo/speech-swift)
+and, on iOS 26+, Apple's system speech model:
 
 - **Diarization** — Pyannote segmentation + WeSpeaker embeddings with
   constrained clustering, capped to 2 speakers for 1-on-1s
-- **Transcription** — NVIDIA Parakeet TDT (CoreML)
+- **Transcription** — Apple's on-device system speech model (iOS 26+,
+  default), or NVIDIA Parakeet TDT (CoreML) — the built-in engine and the
+  pre-iOS-26 default; switchable in Settings
 - **Speaker ID** — WeSpeaker enrollment matching (cosine similarity)
 
-Models download from Hugging Face on first use and are cached on-device:
-~700 MB for transcription + diarization, plus a small live-caption model.
+Models download on first use and are cached on-device: the diarization
+models (and, when the Parakeet engine is used, transcription) from Hugging
+Face — up to ~700 MB — plus a small live-caption model; Apple's system
+speech model is downloaded and managed by the OS itself.
 Summaries use the Apple Intelligence system model — OS-managed, no
 download — and require an iPhone 15 Pro or later on iOS 26 or later; on
 other devices, export the transcript and summarize it with any AI

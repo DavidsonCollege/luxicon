@@ -41,7 +41,7 @@ final class MockChat: SummaryChat {
 
     @Test func summarizeRunsOverAnyBackend() async throws {
         // The summarizer must work over the SummaryChat protocol, not a
-        // concrete model class — Qwen and Gemma backends are interchangeable.
+        // concrete model class — any backend slots in behind it.
         let mock = MockChat(replies: ["HEADLINE: Budget, hiring\nSUMMARY:\n**Overview** — Discussed budget."])
         let summarizer = MeetingSummarizer(chat: mock)
         let result = try await summarizer.summarize(transcript(
@@ -582,5 +582,74 @@ final class MockStructuredChat: SummaryChat {
         #expect(md.contains("(on-device)"))
         // The transcript export must remain untouched by summaries.
         #expect(!TranscriptExport.markdown(transcript).contains("**Overview** — brief."))
+    }
+}
+
+@Suite struct SummarizerBudgetTests {
+    private func turns(count: Int, chars: Int) -> [TranscriptTurn] {
+        // Multi-word text: single-word blobs would trip the too-thin gate.
+        (0..<count).map {
+            TranscriptTurn(id: $0, speakerId: $0 % 2, speakerName: $0 % 2 == 0 ? "JD" : "Sam",
+                           start: Double($0), end: Double($0 + 1),
+                           text: String(repeating: "wo ", count: chars / 3))
+        }
+    }
+    private func transcript(_ turns: [TranscriptTurn]) -> MeetingTranscript {
+        MeetingTranscript(title: "Weekly 1:1",
+                          date: Date(timeIntervalSince1970: 1_780_000_000),
+                          duration: 60, turns: turns)
+    }
+    private func userText(_ call: [ChatMessage]) -> String {
+        call.last { $0.role == .user }?.content ?? ""
+    }
+
+    @Test func singlePassClipHonorsTheInstanceBudget() async throws {
+        // Budget 30k, transcript ~25k: fits in one pass — the old hardcoded
+        // 20k clip default must not silently cut the middle out.
+        let mock = MockChat(replies: ["HEADLINE: Budget\nSUMMARY:\n**Overview** — Fine."])
+        let summarizer = MeetingSummarizer(chat: mock, transcriptCharBudget: 30_000)
+        _ = try await summarizer.summarize(transcript(turns(count: 50, chars: 490)))
+        #expect(mock.calls.count == 1)
+        #expect(!userText(mock.calls[0]).contains("[… middle of transcript trimmed …]"))
+    }
+
+    @Test func mergePromptStaysWithinTheBudget() async throws {
+        // ~7 sections whose notes come back at the model's verbose worst:
+        // the merge prompt must still fit the instance budget. (Note the
+        // per-note floor is 300 chars — the budget here is chosen so the
+        // scaled allowance stays above it, matching real device budgets.)
+        let noisyNote = String(repeating: "n", count: 3_000)
+        let mock = MockChat(replies: Array(repeating: noisyNote, count: 12))
+        let summarizer = MeetingSummarizer(chat: mock, transcriptCharBudget: 6_000)
+        _ = try await summarizer.summarize(transcript(turns(count: 200, chars: 180)))
+        let merge = userText(mock.calls[mock.calls.count - 1])
+        #expect(merge.count <= 6_000)
+        #expect(merge.contains("Section 1 notes:"))
+    }
+
+    @Test func overBudgetMonologueChunkIsClippedInItsSectionPrompt() async throws {
+        // One 8k-char turn with a 2k budget becomes a single over-budget
+        // chunk — its section prompt must be clipped, not sent whole.
+        let mock = MockChat(replies: ["- note", "HEADLINE: Solo\nSUMMARY:\n**Overview** — One voice."])
+        let summarizer = MeetingSummarizer(chat: mock, transcriptCharBudget: 2_000)
+        _ = try await summarizer.summarize(transcript(turns(count: 1, chars: 8_000)))
+        let section = userText(mock.calls[0])
+        #expect(section.count <= 2_400)  // budget + prompt scaffolding slack
+        #expect(section.contains("[… middle of transcript trimmed …]"))
+    }
+
+    @Test func contextOverheadCountsAgainstTheSinglePassCheck() async throws {
+        // Transcript just under the raw budget + two fat participant
+        // contexts: the combined prompt would blow the window, so the
+        // summarizer must take the sectioned path instead.
+        let fat = String(repeating: "c", count: 2_500)
+        let context = [SummaryParticipant(name: "JD", context: fat),
+                       SummaryParticipant(name: "Sam", context: fat)]
+        let mock = MockChat(replies: Array(repeating: "- note", count: 6)
+            + ["HEADLINE: Ctx\nSUMMARY:\n**Overview** — Ok."])
+        let summarizer = MeetingSummarizer(chat: mock, transcriptCharBudget: 6_000)
+        _ = try await summarizer.summarize(
+            transcript(turns(count: 20, chars: 280)), context: context)
+        #expect(mock.calls.count >= 2)  // sectioned, not single-pass
     }
 }

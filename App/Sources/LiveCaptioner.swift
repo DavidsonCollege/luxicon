@@ -27,8 +27,9 @@ final class LiveCaptioner {
     private let sink = SampleSink()
     private var pumpTask: Task<Void, Never>?
     // Written once in init, read in deinit (nonisolated in Swift 6); the
-    // observer closures capture only the thread-safe sink.
-    nonisolated(unsafe) private var lifecycleObservers: [NSObjectProtocol] = []
+    // observer closures capture only the thread-safe sink. @ObservationIgnored
+    // keeps this real storage so nonisolated(unsafe) applies to it.
+    @ObservationIgnored nonisolated(unsafe) private var lifecycleObservers: [NSObjectProtocol] = []
 
     init() {
         #if os(iOS)

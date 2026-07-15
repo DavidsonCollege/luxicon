@@ -5,7 +5,6 @@ import LuxiconKit
 /// Enroll the user's own voice so their turns are auto-labeled in every transcript.
 struct MyVoiceView: View {
     @Environment(Store.self) private var store
-    @Environment(\.dismiss) private var dismiss
 
     @State private var recorder = Recorder()
     @State private var isRecording = false
@@ -150,7 +149,7 @@ struct MyVoiceView: View {
                 } header: {
                     Text("Transcription")
                 } footer: {
-                    Text("Automatic uses Apple's on-device speech model on this iPhone and falls back to Luxicon's built-in engine if it isn't available. Everything stays on the device either way.")
+                    Text("Automatic uses Apple's on-device speech model on this iPhone. If the Apple engine can't start, transcription falls back to Luxicon's built-in engine. Everything stays on the device either way.")
                 }
             }
 

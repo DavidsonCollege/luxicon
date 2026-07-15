@@ -1,6 +1,6 @@
 # Luxicon privacy policy
 
-*Effective 2026-07-10.*
+*Effective 2026-07-14.*
 
 Luxicon is built so that your conversations stay yours.
 
@@ -19,8 +19,12 @@ by Apple; end-to-end encrypted if you enable Advanced Data Protection).
 
 ## Network connections the app makes
 
-- **Speech model download** (required, first use): models are fetched from
-  Hugging Face. No user data is sent — it is a file download.
+- **Speech model downloads** (required, first use): diarization models are
+  fetched from Hugging Face, and on iOS 26 and later the transcription model
+  is Apple's system speech asset, downloaded by the OS from Apple (with
+  Apple's built-in engine off or unavailable, a transcription model is
+  fetched from Hugging Face instead). No user data is sent — these are file
+  downloads.
 - **Mac sync** (optional, off by default): if you pair a Mac, transcripts
   and summaries you choose to push travel over your local network to that
   Mac, encrypted with a key derived from your pairing token. They do not

@@ -249,3 +249,35 @@ import SpeechVAD
         #expect(ASREngine.appleSpeech.rawValue == "appleSpeech")
     }
 }
+
+@Suite struct TranscriptionYieldTests {
+    private func span(_ start: Double, _ end: Double) -> MeetingPipeline.TurnSpan {
+        MeetingPipeline.TurnSpan(speakerId: 0, start: start, end: end)
+    }
+
+    @Test func allTurnsEmptyOnRealSpeechThrows() {
+        // 3 diarized turns, 30 s of speech, zero transcribed text: the
+        // engine broke at runtime (e.g. appleSpeech asset evicted) — that
+        // must surface as a failure, not a .ready empty transcript.
+        #expect(throws: TranscriptionEmptyError.self) {
+            try MeetingPipeline.checkTranscriptionYield(
+                turns: [], spans: [span(0, 10), span(10, 20), span(20, 30)])
+        }
+    }
+
+    @Test func shortRecordingsMayLegitimatelyYieldNothing() throws {
+        // A cough or mic test: diarization finds a blip, ASR rightly hears
+        // no words. Below the speech threshold the empty result stands.
+        try MeetingPipeline.checkTranscriptionYield(turns: [], spans: [span(0, 4)])
+    }
+
+    @Test func anyTranscribedTurnPasses() throws {
+        let turn = TranscriptTurn(id: 0, speakerId: 0, start: 0, end: 30, text: "hello")
+        try MeetingPipeline.checkTranscriptionYield(
+            turns: [turn], spans: [span(0, 30), span(30, 60)])
+    }
+
+    @Test func noSpansPasses() throws {
+        try MeetingPipeline.checkTranscriptionYield(turns: [], spans: [])
+    }
+}

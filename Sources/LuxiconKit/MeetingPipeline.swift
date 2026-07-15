@@ -53,11 +53,26 @@ public enum ASREngine: String, Codable, Sendable {
     }
 }
 
-/// Load-time engine failure; the app catches it to fall back to Parakeet.
+/// Load-time engine failure, surfaced to the user via `LocalizedError`
+/// (the app treats any appleSpeech load failure as "fall back to Parakeet").
 public struct EngineUnavailableError: Error, LocalizedError {
     public let reason: String
     public init(reason: String) { self.reason = reason }
     public var errorDescription: String? { reason }
+}
+
+/// The engine ran but produced no text for any speaker turn on a recording
+/// with real speech — an engine runtime failure (e.g. the system speech
+/// asset became unavailable mid-run), not a quiet meeting. Surfaced instead
+/// of a "ready" empty transcript, which reads as a silently lost meeting.
+public struct TranscriptionEmptyError: Error, LocalizedError {
+    public let turnCount: Int
+    public init(turnCount: Int) { self.turnCount = turnCount }
+    public var errorDescription: String? {
+        "Transcription produced no text for any of the \(turnCount) speaker "
+            + "turns. The speech engine may be unavailable — try again, or "
+            + "choose a different transcription engine in Settings."
+    }
 }
 
 /// End-to-end 1-on-1 processing: diarize → per-turn transcription → speaker naming.
@@ -167,7 +182,8 @@ public final class MeetingPipeline {
         // ~3 embedding forward passes per 10 s window, each with a unique
         // input length — so on long recordings the cache only ever grows
         // (a 45-minute meeting reached iOS's ~6 GB per-process limit and was
-        // jetsam-killed). Cap the cache for the run and drop it afterwards.
+        // jetsam-killed). Ratchet the process-wide cap down (min() never
+        // raises it back) and drop the cache contents when the run ends.
         MLX.Memory.cacheLimit = min(MLX.Memory.cacheLimit, Self.gpuCacheLimit)
         defer { MLX.Memory.clearCache() }
 
@@ -209,6 +225,8 @@ public final class MeetingPipeline {
                 confidence: asrResult.confidence
             ))
         }
+
+        try Self.checkTranscriptionYield(turns: turns, spans: turnSpans)
 
         // 5. Name speakers from enrollments
         var transcript = MeetingTranscript(title: title, date: date, duration: duration, turns: turns)
@@ -295,6 +313,20 @@ public final class MeetingPipeline {
         var speakerId: Int
         var start: Double
         var end: Double
+    }
+
+    /// Below this much total diarized speech, an all-empty ASR result is
+    /// plausible (mic test, cough) and the empty transcript stands.
+    static let minSpeechSecondsToDemandText: Double = 10
+
+    /// Guard against a silently broken engine: real speech in, zero text out
+    /// across every turn is a failure, not an empty meeting.
+    static func checkTranscriptionYield(turns: [TranscriptTurn], spans: [TurnSpan]) throws {
+        guard turns.isEmpty, !spans.isEmpty else { return }
+        let speech = spans.reduce(0) { $0 + ($1.end - $1.start) }
+        if speech >= minSpeechSecondsToDemandText {
+            throw TranscriptionEmptyError(turnCount: spans.count)
+        }
     }
 
     /// Merge consecutive same-speaker segments with small gaps into speaker turns.

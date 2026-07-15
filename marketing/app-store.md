@@ -61,11 +61,11 @@ cloud in between.
 
 PRIVATE BY ARCHITECTURE
 All speech processing runs on the Apple Neural Engine and GPU in your
-iPhone. Aside from a one-time download of the speech models, Luxicon makes
+iPhone. Aside from one-time speech model downloads, Luxicon makes
 no network connections unless you turn them on: pair a Mac and it can send
 transcripts to that Mac over your own Wi-Fi (encrypted, never the
-internet); point it at a vocabulary file URL and it will fetch that file.
-Otherwise it works in airplane mode. Recordings, transcripts, and voice
+internet); point it at a vocabulary or people-roster file URL and it will
+fetch those files. Otherwise it works in airplane mode. Recordings, transcripts, and voice
 fingerprints stay in the app's private on-device storage and your own
 iPhone backup.
 
@@ -92,9 +92,10 @@ Primary: Business · Secondary: Productivity
 ## App Privacy (nutrition label)
 - Data collection: **Data Not Collected** — the app has no analytics, no
   accounts, and no third-party services; the developer receives nothing.
-- Network use: the Hugging Face model download (no user data), plus two
-  opt-in, user-configured connections: Mac sync on the local network and
-  vocabulary fetches from a user-supplied https URL.
+- Network use: speech model downloads (Hugging Face, and Apple's system
+  speech asset on iOS 26+ — no user data), plus three opt-in,
+  user-configured connections: Mac sync on the local network, and
+  vocabulary / people-roster fetches from user-supplied https URLs.
 - Microphone: used to record meetings the user explicitly starts; audio is
   processed and stored on-device only.
 
@@ -137,6 +138,37 @@ conversation requires consent — please tell the other person before you
 record.
 
 ## TestFlight — What to Test (per-build notes, 4000 chars max)
+
+### Build 11
+
+New since build 10 — a transcription engine choice, and summaries that read
+the whole meeting:
+
+(1) Engine picker (iOS 26 only): My Voice → Transcription now offers
+Automatic, Apple, and Luxicon. Record or re-transcribe the same meeting on
+Apple and on Luxicon and compare transcript quality and speed. Automatic
+should behave like Apple on this phone.
+(2) Long-meeting summaries: summaries are now built from every part of a
+long meeting instead of trimming the middle. Summarize a 45-minute-plus
+recording and confirm topics from the middle of the conversation appear.
+(3) Summaries run on Apple Intelligence only: the old downloaded summary
+model is gone and its disk space is reclaimed automatically. If you used
+summaries on an earlier build, confirm enabling them no longer offers a
+download and existing summaries still display.
+
+### Build 10
+
+New since build 9 — people sync and a giving screen:
+
+(1) People-roster URL sync: in the People list, point the app at a people
+JSON file (same format as Export People) and confirm the roster stays in
+sync on app open — names and context update, nobody is ever removed, and
+the file's "me" entry lands in About You. While sync is on, context fields
+should be read-only in the app.
+(2) Context previews: long context on a person is now a height-capped
+preview — tap it to read and edit the full text on its own screen.
+(3) Giving screen: the Davidson College credit at the bottom of the root
+screen opens a giving page; its links should open in Safari, not in the app.
 
 ### Build 9
 

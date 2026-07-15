@@ -231,6 +231,18 @@ public enum VocabularyCorrector {
 
     #if canImport(UIKit) && !targetEnvironment(macCatalyst)
     static func uiCheckerKnows(_ word: String) -> Bool {
+        // UITextChecker is main-actor-isolated (iOS 26 SDK). ASR correction
+        // runs off-main, so hop; the main actor never awaits the pipeline
+        // synchronously, so this cannot deadlock.
+        if Thread.isMainThread {
+            return MainActor.assumeIsolated { uiCheckerKnowsOnMain(word) }
+        }
+        return DispatchQueue.main.sync {
+            MainActor.assumeIsolated { uiCheckerKnowsOnMain(word) }
+        }
+    }
+
+    @MainActor private static func uiCheckerKnowsOnMain(_ word: String) -> Bool {
         let checker = UITextChecker()
         let range = NSRange(location: 0, length: word.utf16.count)
         let miss = checker.rangeOfMisspelledWord(

@@ -11,7 +11,7 @@ settings:
     # One version train for the app and every extension: App Store validation
     # rejects uploads whose extension CFBundleVersion differs from the app's.
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: 10
+    CURRENT_PROJECT_VERSION: 11
 targets:
   Luxicon:
     type: application

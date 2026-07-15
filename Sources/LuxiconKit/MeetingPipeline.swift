@@ -20,14 +20,14 @@ extension ParakeetASRModel: TurnTranscriber {
     }
 }
 
-/// Which ASR engine transcribes speaker turns. Single-cased today: the
-/// experimental Qwen3-ASR engine was removed 2026-07 (unstable on device;
-/// Apple Intelligence transcription is the planned successor), but the enum
-/// stays — it is persisted in store.json and is the seam a future engine
-/// plugs back into.
+/// Which ASR engine transcribes speaker turns. The app persists the choice
+/// in store.json, and CLI flags pass it as a raw value — both seams demand
+/// stable, backward-compatible cases.
 public enum ASREngine: String, Codable, Sendable {
-    /// Parakeet TDT — CoreML/ANE, fast, the default.
+    /// Parakeet TDT — CoreML/ANE, fast, the pre-iOS-26 default.
     case parakeet
+    /// Apple SpeechTranscriber — system model, out-of-process, iOS 26+.
+    case appleSpeech
 
     /// Tolerant decode: an engine persisted by an older build (e.g. the
     /// retired "qwen3") falls back to the default instead of failing the
@@ -36,6 +36,28 @@ public enum ASREngine: String, Codable, Sendable {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = ASREngine(rawValue: raw) ?? .parakeet
     }
+
+    /// Default engine for this device: Apple's system transcriber where the
+    /// OS supports it, otherwise Parakeet. Locale/asset failures surface at
+    /// load time and fall back there — this is only the cheap OS gate.
+    public static func resolvedDefault() -> ASREngine {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            return resolvedDefault(appleSpeechAvailable: true)
+        }
+        return resolvedDefault(appleSpeechAvailable: false)
+    }
+
+    /// Testable seam for `resolvedDefault()`.
+    public static func resolvedDefault(appleSpeechAvailable: Bool) -> ASREngine {
+        appleSpeechAvailable ? .appleSpeech : .parakeet
+    }
+}
+
+/// Load-time engine failure; the app catches it to fall back to Parakeet.
+public struct EngineUnavailableError: Error, LocalizedError {
+    public let reason: String
+    public init(reason: String) { self.reason = reason }
+    public var errorDescription: String? { reason }
 }
 
 /// End-to-end 1-on-1 processing: diarize → per-turn transcription → speaker naming.
@@ -103,6 +125,14 @@ public final class MeetingPipeline {
             asr = try await ParakeetASRModel.fromPretrained(progressHandler: { p, stage in
                 progress?(0.5 + p * 0.5, stage)
             })
+        case .appleSpeech:
+            guard #available(iOS 26.0, macOS 26.0, *) else {
+                throw EngineUnavailableError(
+                    reason: "Apple speech transcription requires iOS 26 or macOS 26")
+            }
+            asr = try await AppleSpeechTranscriber.load { p, stage in
+                progress?(0.5 + p * 0.5, stage)
+            }
         }
         return MeetingPipeline(diarizer: diarizer, asr: asr)
     }

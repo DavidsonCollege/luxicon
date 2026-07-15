@@ -237,3 +237,15 @@ import SpeechVAD
         #expect(w.asrEngine == nil)
     }
 }
+
+@Suite struct ASREngineDefaultTests {
+    @Test func resolvedDefaultPrefersAppleSpeechWhenAvailable() {
+        #expect(ASREngine.resolvedDefault(appleSpeechAvailable: true) == .appleSpeech)
+        #expect(ASREngine.resolvedDefault(appleSpeechAvailable: false) == .parakeet)
+    }
+
+    @Test func appleSpeechRawValueIsStable() {
+        // Persisted in store.json and passed as a CLI flag — must never change.
+        #expect(ASREngine.appleSpeech.rawValue == "appleSpeech")
+    }
+}

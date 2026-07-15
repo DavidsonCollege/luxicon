@@ -67,8 +67,8 @@ Review fixes on the above:
 Open-source hygiene:
 
 - Acknowledgements screen in the app (My Voice → Open-Source
-  Acknowledgements) lists every dependency and model license; it's
-  generated from `THIRD-PARTY-NOTICES.md` by
+  Acknowledgements) lists every dependency and model license; it and
+  `THIRD-PARTY-NOTICES.md` are both generated from `Package.resolved` by
   `scripts/generate-notices.sh` so the two can't drift.
 - Added CONTRIBUTING.md (dev setup, testing expectations) and
   CODE_OF_CONDUCT.md (Contributor Covenant), plus GitHub issue and pull

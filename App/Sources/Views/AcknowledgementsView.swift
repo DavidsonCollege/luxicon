@@ -41,7 +41,14 @@ struct AcknowledgementsView: View {
                 } header: {
                     Text("Swift packages")
                 } footer: {
-                    Text("Luxicon itself is MIT-licensed. Full license and notice texts are in THIRD-PARTY-NOTICES.md in the source repository.")
+                    Text("Luxicon itself is MIT-licensed. Full license and notice texts are under License texts below, and in THIRD-PARTY-NOTICES.md in the source repository.")
+                }
+                Section {
+                    NavigationLink("Full license and notice texts") {
+                        LicenseTextsView()
+                    }
+                } header: {
+                    Text("License texts")
                 }
             } else {
                 Text("Acknowledgements are missing from this build.")
@@ -55,6 +62,7 @@ struct AcknowledgementsView: View {
     private func row(_ entry: Entry) -> some View {
         if let url = URL(string: entry.url) {
             Link(destination: url) { label(for: entry) }
+                .accessibilityHint("Opens the project page in Safari")
         } else {
             label(for: entry)
         }
@@ -75,6 +83,36 @@ struct AcknowledgementsView: View {
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
+            if let copyright = entry.copyright {
+                Text(copyright)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
+    }
+}
+
+/// Full contents of the bundled THIRD-PARTY-NOTICES.md, pushed from the
+/// packages section so the App Store binary carries the complete license
+/// and NOTICE texts, not just name/version/license-id.
+private struct LicenseTextsView: View {
+    private static let noticesText: String = {
+        guard let url = Bundle.main.url(forResource: "THIRD-PARTY-NOTICES",
+                                        withExtension: "md"),
+              let text = try? String(contentsOf: url, encoding: .utf8) else {
+            return "License texts are missing from this build."
+        }
+        return text
+    }()
+
+    var body: some View {
+        ScrollView {
+            Text(Self.noticesText)
+                .font(.caption.monospaced())
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+        }
+        .navigationTitle("License Texts")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

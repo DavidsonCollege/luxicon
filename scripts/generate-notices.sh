@@ -138,7 +138,8 @@ for e in entries:
 for spdx in sorted(seen):
     out += [f"### {spdx}", "", "```", seen[spdx].rstrip(), "```", ""]
 
-pathlib.Path("THIRD-PARTY-NOTICES.md").write_text("\n".join(out) + "\n")
+notices_text = "\n".join(out) + "\n"
+pathlib.Path("THIRD-PARTY-NOTICES.md").write_text(notices_text)
 
 pathlib.Path("App/Resources").mkdir(parents=True, exist_ok=True)
 ack = {
@@ -148,7 +149,11 @@ ack = {
 }
 pathlib.Path("App/Resources/acknowledgements.json").write_text(
     json.dumps(ack, indent=2, ensure_ascii=False) + "\n")
+# Ship the full notices text in the app bundle too, so the App Store binary
+# itself carries the license/NOTICE texts, not just the source repo.
+pathlib.Path("App/Resources/THIRD-PARTY-NOTICES.md").write_text(notices_text)
 
 print(f"Wrote THIRD-PARTY-NOTICES.md ({len(entries)} packages, {len(models)} models)")
 print("Wrote App/Resources/acknowledgements.json")
+print("Wrote App/Resources/THIRD-PARTY-NOTICES.md")
 PY

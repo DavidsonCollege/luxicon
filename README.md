@@ -184,7 +184,7 @@ privately per [SECURITY.md](SECURITY.md).
 ## License
 
 MIT — see [LICENSE](LICENSE). Every dependency is permissive
-(Apache-2.0 / MIT / BSD family); the full inventory with license and
+(Apache-2.0 / MIT family); the full inventory with license and
 notice texts is in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md),
 mirrored in the app under My Voice → Open-Source Acknowledgements.
 Model weights carry their own licenses: Pyannote segmentation (MIT),

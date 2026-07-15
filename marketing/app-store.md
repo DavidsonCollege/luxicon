@@ -139,6 +139,22 @@ record.
 
 ## TestFlight — What to Test (per-build notes, 4000 chars max)
 
+### Build 15
+
+New since build 14 — a welcome tour:
+
+(1) First launch after updating shows a seven-screen onboarding sequence
+(wildcat artwork, what Luxicon is, key features, and the close-the-loop
+story). Swipe through all seven; check the animations feel smooth and the
+final "Let's get started" button lands you on your people list.
+(2) Replay it anytime from the ⋯ menu on the home screen → Welcome Tour.
+Skip should exit from any screen, and the tour should not reappear on
+subsequent launches on its own.
+(3) If you use Reduce Motion (Settings → Accessibility), confirm the tour
+shows everything without the entrance animations.
+(4) On iPad, rotate during the first screen: portrait and landscape should
+each show artwork that fills the screen.
+
 ### Build 11
 
 New since build 10 — a transcription engine choice, and summaries that read

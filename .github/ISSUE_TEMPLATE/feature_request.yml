@@ -1,0 +1,23 @@
+name: Feature request
+description: An idea for making Luxicon better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that Luxicon doesn't support?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How you imagine it working. Sketches welcome.
+  - type: markdown
+    attributes:
+      value: >-
+        Heads up: Luxicon's privacy posture is a hard constraint — everything
+        on-device, no network calls beyond opt-in Mac sync (LAN-only) and
+        https vocabulary/people sync. Features that need other network
+        access will be declined.

@@ -173,10 +173,21 @@ asks first.
     redirects) when opened.
 - Export is explicit: you choose what leaves the device, and when.
 
+## Contributing
+
+Bug reports and pull requests are welcome — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, testing expectations,
+and the handful of things that will bite you. We follow the
+[Contributor Covenant](CODE_OF_CONDUCT.md); report security issues
+privately per [SECURITY.md](SECURITY.md).
+
 ## License
 
-MIT. Depends on [speech-swift](https://github.com/soniqo/speech-swift)
-(Apache 2.0) and the
-[MCP Swift SDK](https://github.com/modelcontextprotocol/swift-sdk) (MIT);
-model weights carry their own licenses (Pyannote segmentation: MIT;
-WeSpeaker: Apache 2.0; Parakeet: CC-BY-4.0).
+MIT — see [LICENSE](LICENSE). Every dependency is permissive
+(Apache-2.0 / MIT family); the full inventory with license and
+notice texts is in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md),
+mirrored in the app under My Voice → Open-Source Acknowledgements.
+Model weights carry their own licenses: Pyannote segmentation (MIT),
+Parakeet TDT transcription (CC-BY-4.0), WeSpeaker speaker embeddings
+(CC-BY-4.0), and the Parakeet EOU live-caption model (NVIDIA Open Model
+License).

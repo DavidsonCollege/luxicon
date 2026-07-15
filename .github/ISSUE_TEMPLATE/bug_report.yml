@@ -1,0 +1,45 @@
+name: Bug report
+description: Something broke or behaved wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Thanks for the report. One privacy note: never paste transcript
+        content from a real 1-on-1 — describe the shape of the problem
+        instead, or reproduce it with a test recording.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - iOS app
+        - luxicon-cli
+        - luxicon-mcp (MCP server)
+        - Mac sync listener
+        - Docs / other
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS
+      description: e.g. "iPhone 15 Pro, iOS 26.1" or "MacBook Air M2, macOS 15.5"
+    validations:
+      required: true
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Transcription engine (for transcription issues)
+      options:
+        - Automatic
+        - Apple
+        - Luxicon (Parakeet)
+        - Not applicable / don't know
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Steps to reproduce, what you expected, what you got instead.
+    validations:
+      required: true

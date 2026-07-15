@@ -1,0 +1,32 @@
+{
+  "models": [
+    {
+      "name": "NVIDIA Parakeet TDT 0.6B v2",
+      "version": null,
+      "license": "CC-BY-4.0",
+      "url": "https://huggingface.co/aufklarer/Parakeet-TDT-v3-CoreML-INT8-30s",
+      "copyright": "© NVIDIA Corporation (nvidia/parakeet-tdt-0.6b-v2). Converted to CoreML by the speech-swift project."
+    },
+    {
+      "name": "Pyannote segmentation 3.0",
+      "version": null,
+      "license": "MIT",
+      "url": "https://huggingface.co/aufklarer/Pyannote-Segmentation-MLX",
+      "copyright": "© pyannote (Hervé Bredin) (pyannote/segmentation-3.0). Converted to MLX by the speech-swift project."
+    },
+    {
+      "name": "WeSpeaker ResNet34 speaker embeddings",
+      "version": null,
+      "license": "CC-BY-4.0",
+      "url": "https://huggingface.co/aufklarer/WeSpeaker-ResNet34-LM-MLX",
+      "copyright": "© WeSpeaker developers / pyannote (pyannote/wespeaker-voxceleb-resnet34-LM). Converted to MLX by the speech-swift project."
+    },
+    {
+      "name": "NVIDIA Parakeet EOU 120M (streaming, live captions)",
+      "version": null,
+      "license": "NVIDIA Open Model License",
+      "url": "https://huggingface.co/aufklarer/Parakeet-EOU-120M-CoreML-INT8",
+      "copyright": "© NVIDIA Corporation (nvidia/parakeet_realtime_eou_120m-v1). Converted to CoreML by the speech-swift project. License: https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/"
+    }
+  ]
+}

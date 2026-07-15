@@ -189,6 +189,11 @@ struct MyVoiceView: View {
                             .foregroundStyle(.primary)
                     }
                 }
+                NavigationLink {
+                    AcknowledgementsView()
+                } label: {
+                    Text("Open-Source Acknowledgements")
+                }
             } header: {
                 Text("Davidson College")
             } footer: {

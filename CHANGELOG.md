@@ -64,6 +64,18 @@ Review fixes on the above:
   identity is present; a `listener-v*` tag builds and publishes it to
   GitHub Releases via CI.
 
+Open-source hygiene:
+
+- Acknowledgements screen in the app (My Voice → Open-Source
+  Acknowledgements) lists every dependency and model license; it and
+  `THIRD-PARTY-NOTICES.md` are both generated from `Package.resolved` by
+  `scripts/generate-notices.sh` so the two can't drift.
+- Added CONTRIBUTING.md (dev setup, testing expectations) and
+  CODE_OF_CONDUCT.md (Contributor Covenant), plus GitHub issue and pull
+  request templates.
+- The Mac listener installer package now bundles
+  THIRD-PARTY-NOTICES.md alongside the binary.
+
 ## 1.0 (builds 1–5)
 
 Initial development: on-device diarized transcription, speaker enrollment,

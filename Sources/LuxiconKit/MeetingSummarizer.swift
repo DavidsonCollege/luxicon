@@ -158,13 +158,21 @@ public final class MeetingSummarizer {
         // content. Decided in code, not prompt.
         if Self.isEmpty(transcript) { return Self.emptyResult }
         if Self.isTooThin(transcript) { return Self.thinResult }
-        if Self.turnLines(transcript.turns).count > transcriptCharBudget {
-            return try await summarizeInSections(transcript, context: context)
+        // The budget covers the whole user prompt, so the reference block and
+        // metadata spend against it before the transcript does — two rich
+        // participant contexts alone are worth ~1,000 tokens.
+        let overhead = Self.referenceBlock(context).count
+            + Self.metadataBlock(for: transcript).count
+        // Floor: overhead alone must never zero the transcript's share, but
+        // the floor can't exceed the configured budget either.
+        let available = max(min(transcriptCharBudget, 1_000), transcriptCharBudget - overhead)
+        if Self.turnLines(transcript.turns).count > available {
+            return try await summarizeInSections(transcript, context: context, budget: available)
         }
         var sampling = ChatSamplingConfig.default
         sampling.temperature = 0.3
         sampling.maxTokens = 700
-        let userPrompt = Self.userPrompt(for: transcript, context: context)
+        let userPrompt = Self.userPrompt(for: transcript, context: context, clipLimit: available)
         if let structured = try await chat.generateStructuredSummary(
             system: Self.systemPrompt, user: userPrompt, sampling: sampling
         ) {
@@ -185,9 +193,18 @@ public final class MeetingSummarizer {
     /// Replaces the old head+tail trim — every part of a long meeting is read.
     nonisolated(nonsending) private func summarizeInSections(
         _ transcript: MeetingTranscript,
-        context: [SummaryParticipant]
+        context: [SummaryParticipant],
+        budget: Int
     ) async throws -> (headline: String, overview: String) {
-        let chunks = Self.splitTurns(transcript.turns, budget: transcriptCharBudget)
+        let chunks = Self.splitTurns(transcript.turns, budget: budget)
+        // The merge prompt re-spends the same budget: fixed merge prose plus
+        // one "Section N notes:" wrapper per section, then the notes. Derive
+        // the per-note allowance from the chunk count so the assembled merge
+        // prompt always fits — thinner notes on very long meetings beat a
+        // context-window error on every attempt.
+        let mergeProse = 400
+        let perNoteWrapper = 24
+        let noteLimit = max(300, min(2_000, (budget - mergeProse) / max(chunks.count, 1) - perNoteWrapper))
         var sampling = ChatSamplingConfig.default
         sampling.temperature = 0.3
         sampling.maxTokens = 400
@@ -197,7 +214,7 @@ public final class MeetingSummarizer {
                 messages: [
                     ChatMessage(role: .system, content: Self.sectionNotesSystemPrompt),
                     ChatMessage(role: .user, content: Self.sectionNotesPrompt(
-                        part: i + 1, of: chunks.count, turns: chunk)),
+                        part: i + 1, of: chunks.count, turns: chunk, clipLimit: budget)),
                 ],
                 sampling: sampling
             )
@@ -205,7 +222,7 @@ public final class MeetingSummarizer {
             // bullets, yielding "- - item") and clip — a runaway section
             // reply must not blow the merge pass's budget.
             notes.append(Self.clip(
-                Self.debullet(raw.trimmingCharacters(in: .whitespacesAndNewlines)), limit: 2_000))
+                Self.debullet(raw.trimmingCharacters(in: .whitespacesAndNewlines)), limit: noteLimit))
         }
         var merge = ChatSamplingConfig.default
         merge.temperature = 0.3
@@ -418,7 +435,8 @@ public final class MeetingSummarizer {
 
     static func userPrompt(
         for transcript: MeetingTranscript,
-        context: [SummaryParticipant] = []
+        context: [SummaryParticipant] = [],
+        clipLimit: Int = 20_000
     ) -> String {
         // Glossary FIRST, transcript LAST: recency and ordering make the
         // transcript the obvious (and only) thing to summarize, which stops the
@@ -426,7 +444,7 @@ public final class MeetingSummarizer {
         // participant background.
         referenceBlock(context)
             + metadataBlock(for: transcript)
-            + "\n\nTranscript:\n\(clip(turnLines(transcript.turns)))"
+            + "\n\nTranscript:\n\(clip(turnLines(transcript.turns), limit: clipLimit))"
     }
 
     /// The transcript rendering every pass (and the budget check) shares.
@@ -623,12 +641,16 @@ public final class MeetingSummarizer {
     items with owner names. No headings, no introduction, no conclusion.
     """
 
-    static func sectionNotesPrompt(part: Int, of total: Int, turns: [TranscriptTurn]) -> String {
+    static func sectionNotesPrompt(
+        part: Int, of total: Int, turns: [TranscriptTurn], clipLimit: Int = 20_000
+    ) -> String {
+        // The clip covers the one case splitTurns can't: a single monologue
+        // turn longer than the whole budget becomes its own over-budget chunk.
         """
         This is part \(part) of \(total) of the meeting transcript.
 
         Transcript section:
-        \(turnLines(turns))
+        \(clip(turnLines(turns), limit: clipLimit))
         """
     }
 

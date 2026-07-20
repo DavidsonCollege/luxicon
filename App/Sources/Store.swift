@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 import LuxiconKit
 
 /// A direct report you hold 1-on-1s with.
@@ -127,6 +128,16 @@ final class Store {
     /// Set when the persisted library could not be read at launch (the file
     /// is quarantined, never overwritten). Shown once by the root view.
     var startupWarning: String?
+    /// Set when store.json exists but reading it failed — how a launch looks
+    /// while the device is locked (prewarming, background audio relaunch):
+    /// Documents is `.completeUnlessOpen`, so the bytes are undecryptable
+    /// until unlock even though the file is listable. While pending, save()
+    /// is a no-op so the blank in-memory state can never overwrite the
+    /// on-disk library; the load retries on unlock and on foreground.
+    @ObservationIgnored private(set) var loadPending = false
+    /// Retry-on-unlock observer; lives as long as the store (see LiveCaptioner
+    /// for the storage pattern).
+    @ObservationIgnored nonisolated(unsafe) private var protectedDataObserver: NSObjectProtocol?
     /// Set when persisting the library fails (e.g. storage full).
     var saveError: String?
 
@@ -193,6 +204,27 @@ final class Store {
                 ofItemAtPath: url.path)
         }
         load()
+        if !loadPending { finishStartup() }
+        // Locked-launch recovery: the moment the content becomes readable,
+        // load for real. Registered unconditionally — the handler no-ops
+        // unless a load is actually pending.
+        protectedDataObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.protectedDataDidBecomeAvailableNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.retryPendingLoad() }
+        }
+    }
+
+    deinit {
+        if let protectedDataObserver {
+            NotificationCenter.default.removeObserver(protectedDataObserver)
+        }
+    }
+
+    /// One-time recovery passes that must only run against real library
+    /// state — after a successful (possibly deferred) load, never before.
+    private func finishStartup() {
         // Builds 1-9 cached the old Qwen summarizer (~400 MB); reclaim it.
         removeLegacySummaryModel()
         // Recover sessions stuck mid-processing by an app kill.
@@ -200,6 +232,15 @@ final class Store {
             sessions[i].status = .recorded
         }
         recoverInterruptedRecordings()
+    }
+
+    /// Re-run a load that was deferred because store.json was unreadable
+    /// (device locked). Called on unlock and on foreground; no-op otherwise.
+    func retryPendingLoad() {
+        guard loadPending else { return }
+        load()
+        guard !loadPending else { return }
+        finishStartup()
     }
 
     func load() {
@@ -210,10 +251,21 @@ final class Store {
         peopleHeaders = KeychainStore.data(for: Self.keychainPeopleHeaders)
             .flatMap { try? JSONDecoder().decode([HTTPHeader].self, from: $0) } ?? []
 
+        loadPending = false
         guard FileManager.default.fileExists(atPath: Self.storeURL.path) else { return }
+        let data: Data
+        do {
+            data = try Data(contentsOf: Self.storeURL)
+        } catch {
+            // Unreadable is not corrupt. This is the locked-device launch
+            // (NSFileReadNoPermission on a `.completeUnlessOpen` file):
+            // the library on disk is healthy, so leave it exactly where it
+            // is and try again when the content becomes readable.
+            loadPending = true
+            return
+        }
         let persisted: Persisted
         do {
-            let data = try Data(contentsOf: Self.storeURL)
             persisted = try JSONDecoder().decode(Persisted.self, from: data)
         } catch {
             // Never overwrite what we can't read: set it aside so the next
@@ -263,6 +315,9 @@ final class Store {
     }
 
     func save() {
+        // A pending load means the on-disk library exists but has never been
+        // read this launch; writing now would replace it with blank state.
+        guard !loadPending else { return }
         KeychainStore.set(syncToken, for: Self.keychainSyncToken)
         KeychainStore.set(
             vocabularyHeaders.isEmpty ? nil : try? JSONEncoder().encode(vocabularyHeaders),

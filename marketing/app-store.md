@@ -139,6 +139,22 @@ record.
 
 ## TestFlight — What to Test (per-build notes, 4000 chars max)
 
+### Build 17
+
+Fixes a data-loss bug: if iOS started Luxicon in the background while the
+phone was locked (which the system does on its own), the app mistook its
+unreadable-while-locked library file for a corrupt one, set it aside, and
+came up empty — your conversations looked gone even though the file was
+fine. The library now simply waits until the phone is unlocked and loads
+normally, and nothing is ever overwritten in the meantime.
+
+If this already happened to you (the app suddenly showed a blank slate),
+don't delete the app — the library file is still there and recoverable;
+reply to this build's feedback and we'll restore it.
+
+Nothing else changed in this build. A quick pass over recording, transcripts,
+and Mac sync to confirm no regressions is plenty.
+
 ### Build 16
 
 New since build 15 — visible errors when voice enrollment can't start:

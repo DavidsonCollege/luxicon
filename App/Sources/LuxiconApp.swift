@@ -28,6 +28,10 @@ struct LuxiconApp: App {
                 // disappear) before iOS gets a chance to jetsam the process.
                 store.save()
             case .active:
+                // A load deferred by a locked-device launch retries here as
+                // well as on the unlock notification (ordering isn't
+                // guaranteed, and .active implies the data is readable).
+                store.retryPendingLoad()
                 store.handleScenePhaseChange(toBackground: false)
                 store.syncVocabularyIfConfigured()
                 store.syncPeopleIfConfigured()

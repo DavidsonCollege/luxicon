@@ -33,6 +33,18 @@ import Testing
         #expect(LuxiconSync.sanitizedFilename("Sam 2026-07-09.json") == "Sam 2026-07-09.json")
     }
 
+    @Test func sessionFilenameMatchesPhoneFormat() {
+        let id = UUID(uuidString: "ABCDEF12-0000-0000-0000-000000000000")!
+        let name = LuxiconSync.sessionFilename(
+            person: "Sam", date: Date(timeIntervalSince1970: 1_780_000_000), id: id)
+        #expect(name == "Sam 2026-05-28 ABCDEF12.json")
+    }
+
+    @Test func sessionFilenameSanitizesSlashes() {
+        let name = LuxiconSync.sessionFilename(person: "A/B", date: Date(), id: UUID())
+        #expect(!name.contains("/"))
+    }
+
     @Test func frameIsLengthPrefixed() {
         let payload = Data("hello".utf8)
         let framed = LuxiconSync.frame(payload)

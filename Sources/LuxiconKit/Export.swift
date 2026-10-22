@@ -19,20 +19,29 @@ public enum TranscriptExport {
         return out
     }
 
+    /// `source` value written by the Mac app for sessions it recorded itself.
+    public static let macSource = "mac"
+
     /// Structured JSON (stable schema, `schemaVersion` field) for programmatic
     /// AI consumption — e.g. an MCP server or batch analysis. The summary
     /// rides along when present (it stays out of the markdown export).
-    public static func json(_ t: MeetingTranscript, summary: SessionSummary? = nil) throws -> Data {
+    public static func json(_ t: MeetingTranscript, summary: SessionSummary? = nil,
+                                sessionId: UUID? = nil, source: String? = nil) throws -> Data {
         struct Envelope: Encodable {
             let schemaVersion = 1
             let kind = "one-on-one"
             let transcript: MeetingTranscript
             let summary: SessionSummary?
+            // Provenance for the shared library; nil keys are omitted, so
+            // phone exports stay byte-identical.
+            let sessionId: UUID?
+            let source: String?
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        return try encoder.encode(Envelope(transcript: t, summary: summary))
+        return try encoder.encode(Envelope(
+            transcript: t, summary: summary, sessionId: sessionId, source: source))
     }
 
     /// Standalone summary export — deliberately separate from the transcript

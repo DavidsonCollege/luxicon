@@ -15,6 +15,9 @@ public struct TranscriptLibrary {
         public var transcript: MeetingTranscript
         public var summary: SessionSummary?
         public var sourceFile: String
+        /// Provenance from the export envelope, when present.
+        public var sessionId: UUID? = nil
+        public var source: String? = nil
     }
 
     public var sessions: [Session] = []
@@ -57,8 +60,10 @@ public struct TranscriptLibrary {
             let kind: String?
             let transcript: MeetingTranscript
             let summary: SessionSummary?
+            let sessionId: UUID?
+            let source: String?
 
-            enum CodingKeys: String, CodingKey { case kind, transcript, summary }
+            enum CodingKeys: String, CodingKey { case kind, transcript, summary, sessionId, source }
             init(from decoder: Decoder) throws {
                 let c = try decoder.container(keyedBy: CodingKeys.self)
                 kind = try c.decodeIfPresent(String.self, forKey: .kind)
@@ -67,6 +72,9 @@ public struct TranscriptLibrary {
                 // drift) degrades to nil instead of hiding the whole session
                 // — the transcript is the payload, the summary an enrichment.
                 summary = try? c.decodeIfPresent(SessionSummary.self, forKey: .summary)
+                // Same leniency for provenance: a malformed value is nil.
+                sessionId = try? c.decodeIfPresent(UUID.self, forKey: .sessionId)
+                source = try? c.decodeIfPresent(String.self, forKey: .source)
             }
         }
         struct BundleEnvelope: Decodable {
@@ -83,7 +91,8 @@ public struct TranscriptLibrary {
         if let envelope = try? decoder.decode(SessionEnvelope.self, from: data) {
             let t = envelope.transcript
             return [Session(person: personName(for: t, folderName: folderName),
-                            transcript: t, summary: envelope.summary, sourceFile: sourceFile)]
+                            transcript: t, summary: envelope.summary, sourceFile: sourceFile,
+                            sessionId: envelope.sessionId, source: envelope.source)]
         }
         if let transcript = try? decoder.decode(MeetingTranscript.self, from: data) {
             return [Session(person: personName(for: transcript, folderName: folderName),

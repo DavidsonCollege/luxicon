@@ -48,7 +48,7 @@ extension Store {
         do {
             let payload = try TranscriptExport.json(transcript, summary: session.summary)
             let person = person(id: session.personId)?.name ?? "session"
-            let filename = "\(person) \(session.date.formatted(.iso8601.year().month().day())) \(session.id.uuidString.prefix(8)).json"
+            let filename = LuxiconSync.sessionFilename(person: person, date: session.date, id: session.id)
             let host = syncHost.trimmingCharacters(in: .whitespaces)
             try await LuxiconSync.push(
                 filename: filename,

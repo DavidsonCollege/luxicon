@@ -97,4 +97,32 @@ import Foundation
         #expect(trend.count == 1)
         #expect(abs((trend[0].personShare ?? 0) - 49.0 / 119.0) < 0.001)
     }
+
+    @Test func exportWithoutProvenanceIsUnchanged() throws {
+        let data = try TranscriptExport.json(transcript(title: "1-on-1 with Sam", day: 0), summary: nil)
+        let dict = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(dict["sessionId"] == nil)
+        #expect(dict["source"] == nil)
+    }
+
+    @Test func exportWithProvenanceRoundTrips() throws {
+        let id = UUID()
+        let data = try TranscriptExport.json(
+            transcript(title: "1-on-1 with Sam", day: 0),
+            sessionId: id, source: TranscriptExport.macSource)
+        let sessions = TranscriptLibrary.parse(data, sourceFile: "a.json", folderName: nil)
+        #expect(sessions.count == 1)
+        #expect(sessions[0].sessionId == id)
+        #expect(sessions[0].source == "mac")
+    }
+
+    @Test func badProvenanceDoesNotHideSession() throws {
+        let data = try TranscriptExport.json(transcript(title: "1-on-1 with Sam", day: 0))
+        var dict = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        dict["sessionId"] = 42
+        let bad = try JSONSerialization.data(withJSONObject: dict)
+        let sessions = TranscriptLibrary.parse(bad, sourceFile: "a.json", folderName: nil)
+        #expect(sessions.count == 1)
+        #expect(sessions[0].sessionId == nil)
+    }
 }

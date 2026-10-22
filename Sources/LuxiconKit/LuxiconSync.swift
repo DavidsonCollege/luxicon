@@ -39,6 +39,12 @@ public enum LuxiconSync {
         }
     }
 
+    /// Library filename for a session, shared by the phone's push and the Mac
+    /// app so both sides name (and dedupe) a session identically.
+    public static func sessionFilename(person: String, date: Date, id: UUID) -> String {
+        sanitizedFilename("\(person) \(date.formatted(.iso8601.year().month().day())) \(id.uuidString.prefix(8)).json")
+    }
+
     /// Strip anything that could escape the library directory.
     public static func sanitizedFilename(_ name: String) -> String {
         let cleaned = name

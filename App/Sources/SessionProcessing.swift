@@ -28,6 +28,11 @@ final class ProcessingState {
     @ObservationIgnored var inBackground = false
     /// True while the record screen is capturing audio.
     @ObservationIgnored var recordingActive = false
+    #if os(macOS)
+    /// Held while recording or processing so the Mac doesn't idle-sleep
+    /// mid-meeting or mid-inference (the iOS equivalent is the idle timer).
+    @ObservationIgnored var keepAwakeActivity: NSObjectProtocol?
+    #endif
 
     func info(for id: UUID) -> Info? { bySession[id] }
 }
@@ -72,10 +77,12 @@ extension Store {
                 ) { fraction, stage in
                     Task { @MainActor in
                         self.processing.bySession[sessionId] = .init(fraction: fraction, stage: stage)
+                        #if os(iOS)
                         if #available(iOS 26.0, *) {
                             ContinuedProcessing.shared.report(
                                 sessionId: sessionId, fraction: fraction, stage: stage)
                         }
+                        #endif
                     }
                 }
                 if let personName {
@@ -94,9 +101,11 @@ extension Store {
             }
             processing.bySession[sessionId] = nil
             processing.tasks[sessionId] = nil
+            #if os(iOS)
             if #available(iOS 26.0, *) {
                 ContinuedProcessing.shared.end(sessionId: sessionId, success: s.status == .ready)
             }
+            #endif
             // Merge onto the CURRENT stored record: fields that changed during
             // the minutes of pipeline work (a push outcome, a speaker rename)
             // must not be reverted by writing back this task's stale copy.
@@ -133,6 +142,7 @@ extension Store {
         // task lets this work survive backgrounding; on expiration, reuse the
         // backgrounding cancellation path so the session returns to .recorded
         // and auto-resumes on next foreground.
+        #if os(iOS)
         if #available(iOS 26.0, *) {
             let title = personName.map { "Transcribing 1-on-1 with \($0)" } ?? "Transcribing 1-on-1"
             ContinuedProcessing.shared.begin(sessionId: sessionId, title: title) { [weak self] in
@@ -141,8 +151,10 @@ extension Store {
                 self.processing.tasks[sessionId]?.cancel()
             }
         }
+        #endif
     }
 
+    #if os(iOS)
     /// iOS kills processes that touch the GPU while backgrounded (MLX
     /// diarization does). Cancel gracefully and pick the work back up when the
     /// app returns to the foreground — unless a continuous background task
@@ -175,9 +187,11 @@ extension Store {
             }
         }
     }
+    #endif
 
     /// Keep the screen on while recording or processing, so the app is never
-    /// forced into the background mid-inference by the auto-lock timer.
+    /// forced into the background mid-inference by the auto-lock timer. On
+    /// the Mac, hold a power assertion against idle sleep instead.
     func setRecordingActive(_ active: Bool) {
         processing.recordingActive = active
         refreshKeepAwake()
@@ -187,6 +201,16 @@ extension Store {
         #if os(iOS)
         UIApplication.shared.isIdleTimerDisabled =
             processing.recordingActive || !processing.bySession.isEmpty
+        #else
+        let busy = processing.recordingActive || !processing.bySession.isEmpty
+        if busy, processing.keepAwakeActivity == nil {
+            processing.keepAwakeActivity = ProcessInfo.processInfo.beginActivity(
+                options: [.idleSystemSleepDisabled, .userInitiated],
+                reason: "Recording or transcribing a 1-on-1")
+        } else if !busy, let activity = processing.keepAwakeActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+            processing.keepAwakeActivity = nil
+        }
         #endif
     }
 }

@@ -20,9 +20,7 @@ struct SyncSourceSection: View {
     var body: some View {
         Section {
             TextField(urlPlaceholder, text: $sourceURL)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+                .textEntry(.url)
                 .onSubmit {
                     onSave()
                     onSync()
@@ -45,13 +43,11 @@ struct SyncSourceSection: View {
                             }
                             .buttonStyle(.borderless)
                             TextField("Header", text: headerBinding(header.id, \.name))
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
+                                .textEntry(.header)
                                 .frame(maxWidth: 140)
                             Divider()
                             TextField("Value", text: headerBinding(header.id, \.value))
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
+                                .textEntry(.header)
                         }
                         .font(.callout.monospaced())
                     }

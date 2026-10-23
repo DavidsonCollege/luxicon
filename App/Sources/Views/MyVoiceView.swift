@@ -1,6 +1,5 @@
 import SwiftUI
 import AVFoundation
-import UIKit
 import LuxiconKit
 
 /// Enroll the user's own voice so their turns are auto-labeled in every transcript.
@@ -157,7 +156,7 @@ struct MyVoiceView: View {
                 } header: {
                     Text("Transcription")
                 } footer: {
-                    Text("Automatic uses Apple's on-device speech model on this iPhone. If the Apple engine can't start, transcription falls back to Luxicon's built-in engine. Everything stays on the device either way.")
+                    Text("Automatic uses Apple's on-device speech model on this \(DeviceNoun.current). If the Apple engine can't start, transcription falls back to Luxicon's built-in engine. Everything stays on the device either way.")
                 }
             }
 
@@ -166,14 +165,11 @@ struct MyVoiceView: View {
                     Label("Send installer link to your Mac", systemImage: "square.and.arrow.up")
                 }
                 TextField("Pairing token from `luxicon-mcp listen`", text: $store.syncToken)
-                    .textInputAutocapitalization(.characters)
-                    .autocorrectionDisabled()
+                    .textEntry(.token)
                     .onChange(of: store.syncToken) { store.save() }
                 if !store.syncToken.isEmpty {
                     TextField("Mac address (optional, e.g. 192.168.1.5)", text: $store.syncHost)
-                        .keyboardType(.numbersAndPunctuation)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                        .textEntry(.host)
                         .onChange(of: store.syncHost) { store.save() }
                     Toggle("Push automatically after each 1-on-1", isOn: $store.autoPushToMac)
                         .onChange(of: store.autoPushToMac) { store.save() }
@@ -242,9 +238,7 @@ struct MyVoiceView: View {
         }
         .alert("Microphone Access Is Off", isPresented: $showingMicDeniedAlert) {
             Button("Open Settings") {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    openURL(url)
-                }
+                openURL(SystemSettings.microphonePrivacyURL)
             }
             Button("Not Now", role: .cancel) {}
         } message: {
@@ -348,7 +342,7 @@ struct MyVoiceView: View {
         case .notEnabled:
             return "Summaries require Apple Intelligence — turn it on in Settings → Apple Intelligence & Siri."
         case .modelNotReady:
-            return "Summaries require Apple Intelligence, which is still preparing on this iPhone — check back shortly."
+            return "Summaries require Apple Intelligence, which is still preparing on this \(DeviceNoun.current) — check back shortly."
         }
     }
 

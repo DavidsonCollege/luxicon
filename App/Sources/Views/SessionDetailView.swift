@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 import LuxiconKit
 
 /// One session: processing state, transcript, stats, export.
@@ -20,7 +19,7 @@ struct SessionDetailView: View {
             }
         }
         .navigationTitle(session?.date.formatted(date: .abbreviated, time: .omitted) ?? "Session")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 
     @ViewBuilder
@@ -119,13 +118,13 @@ struct TranscriptView: View {
                         }
                     }
                     Button {
-                        copyToPasteboard(TranscriptExport.markdown(transcript))
+                        Pasteboard.copy(TranscriptExport.markdown(transcript))
                     } label: {
                         Label("Copy Markdown", systemImage: "doc.on.doc")
                     }
                     Button {
                         if let data = try? TranscriptExport.json(transcript) {
-                            copyToPasteboard(String(decoding: data, as: UTF8.self))
+                            Pasteboard.copy(String(decoding: data, as: UTF8.self))
                         }
                     } label: {
                         Label("Copy JSON", systemImage: "curlybraces")
@@ -275,17 +274,6 @@ struct TranscriptView: View {
             }
         }
         .disabled(isPushing)
-    }
-
-    /// Local-only + expiring: transcripts shouldn't hop devices via Universal
-    /// Clipboard or linger in the pasteboard indefinitely.
-    private func copyToPasteboard(_ text: String) {
-        UIPasteboard.general.setItems(
-            [[UTType.utf8PlainText.identifier: text]],
-            options: [
-                .localOnly: true,
-                .expirationDate: Date().addingTimeInterval(10 * 60),
-            ])
     }
 
     /// ShareLink needs a file URL; write the markdown next to the temp dir.

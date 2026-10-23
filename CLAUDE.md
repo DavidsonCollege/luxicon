@@ -19,6 +19,13 @@ xcodebuild -project Luxicon.xcodeproj -scheme Luxicon \
 #   ~/Library/Developer/Xcode/DerivedData/Luxicon-*/Build/Products/Release-iphoneos/Luxicon.app`
 # Use Release for device installs — Debug builds depend on the stub-executor debug dylib.
 
+# Mac app (LuxiconMac target in the same project; shares App/Sources minus the
+# iOS-only files excluded in project.yml, Mac-only code in App/MacSources).
+# Signed with the Developer ID identity in the login keychain. State lives in
+# ~/Library/Application Support/Luxicon/; Debug builds take `-storePath <dir>`.
+xcodebuild -project Luxicon.xcodeproj -scheme LuxiconMac \
+  -destination 'platform=macOS,arch=arm64' -configuration Debug build
+
 # Mac sync listener — install ONLY via the script (builds, codesigns, installs to
 # ~/bin, allows through the macOS firewall, restarts the LaunchAgent).
 # Hand-copying the binary re-blocks it: the firewall keys "Allow" to the code

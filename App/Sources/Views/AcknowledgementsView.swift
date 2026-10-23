@@ -173,7 +173,7 @@ private struct LicenseTextsView: View {
             .padding()
         }
         .navigationTitle("License Texts")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 
     @ViewBuilder

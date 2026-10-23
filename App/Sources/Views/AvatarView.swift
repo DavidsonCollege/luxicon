@@ -11,7 +11,7 @@ struct AvatarView: View {
     var body: some View {
         Group {
             if let image = loadedImage {
-                Image(uiImage: image)
+                Image(platformImage: image)
                     .resizable()
                     .scaledToFill()
             } else {
@@ -28,9 +28,9 @@ struct AvatarView: View {
         .clipShape(Circle())
     }
 
-    private var loadedImage: UIImage? {
+    private var loadedImage: PlatformImage? {
         guard let fileName else { return nil }
-        return UIImage(contentsOfFile: Store.photoURL(fileName: fileName).path)
+        return PlatformImage(contentsOfFile: Store.photoURL(fileName: fileName).path)
     }
 
     private var initials: String {
@@ -76,23 +76,10 @@ struct AvatarPicker: View {
             selection = nil
             Task {
                 guard let data = try? await item.loadTransferable(type: Data.self),
-                      let jpeg = Self.downscaledJPEG(from: data) else { return }
+                      let jpeg = PlatformImage.downscaledJPEG(from: data, maxDimension: 512)
+                else { return }
                 onChange(jpeg)
             }
         }
-    }
-
-    /// Avatars render at ≤88 pt, so cap photos at 512 px and re-encode as
-    /// JPEG rather than storing multi-megabyte originals.
-    private static func downscaledJPEG(from data: Data, maxDimension: CGFloat = 512) -> Data? {
-        guard let image = UIImage(data: data) else { return nil }
-        let scale = min(1, maxDimension / max(image.size.width, image.size.height))
-        let target = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: target))
-        }
-        return resized.jpegData(compressionQuality: 0.8)
     }
 }

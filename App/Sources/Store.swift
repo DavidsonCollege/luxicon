@@ -1,6 +1,8 @@
 import Foundation
 import Observation
+#if os(iOS)
 import UIKit
+#endif
 import LuxiconKit
 
 /// A direct report you hold 1-on-1s with.
@@ -57,6 +59,10 @@ struct SessionRecord: Codable, Identifiable, Equatable {
     /// so pre-existing store.json decodes unchanged.
     var lastPushDate: Date?
     var lastPushError: String?
+    /// Mac only: the session's file name in the shared ~/Luxicon library
+    /// once written there. Optional so pre-existing store.json decodes
+    /// unchanged.
+    var libraryFileName: String?
 
     var audioFileName: String { "\(id.uuidString).wav" }
 }
@@ -175,7 +181,23 @@ final class Store {
         var peopleLastSync: Date?
     }
 
-    static let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    /// Root of all app state. iOS: the app's Documents container. macOS:
+    /// ~/Library/Application Support/Luxicon/ (DEBUG builds accept
+    /// `-storePath <dir>` to point a test run at a scratch library).
+    static let documentsURL: URL = {
+        #if os(iOS)
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        #else
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-storePath"), i + 1 < args.count {
+            return URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)
+        }
+        #endif
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Luxicon", isDirectory: true)
+        #endif
+    }()
     static let storeURL = documentsURL.appendingPathComponent("store.json")
     static let audioDirURL = documentsURL.appendingPathComponent("audio", isDirectory: true)
     static let photosDirURL = documentsURL.appendingPathComponent("photos", isDirectory: true)
@@ -195,6 +217,7 @@ final class Store {
     init() {
         try? FileManager.default.createDirectory(at: Self.audioDirURL, withIntermediateDirectories: true)
         try? FileManager.default.createDirectory(at: Self.photosDirURL, withIntermediateDirectories: true)
+        #if os(iOS)
         // Data protection: new files inherit the directory's class, so the
         // library is unreadable while the device is locked. The live recording
         // stays writable because its file is already open (`completeUnlessOpen`).
@@ -203,8 +226,10 @@ final class Store {
                 [.protectionKey: FileProtectionType.completeUnlessOpen],
                 ofItemAtPath: url.path)
         }
+        #endif
         load()
         if !loadPending { finishStartup() }
+        #if os(iOS)
         // Locked-launch recovery: the moment the content becomes readable,
         // load for real. Registered unconditionally — the handler no-ops
         // unless a load is actually pending.
@@ -214,6 +239,7 @@ final class Store {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.retryPendingLoad() }
         }
+        #endif
     }
 
     deinit {
@@ -348,7 +374,11 @@ final class Store {
         )
         do {
             let data = try JSONEncoder().encode(persisted)
+            #if os(iOS)
             try data.write(to: Self.storeURL, options: [.atomic, .completeFileProtectionUnlessOpen])
+            #else
+            try data.write(to: Self.storeURL, options: .atomic)
+            #endif
             saveError = nil
         } catch {
             saveError = "Could not save the session library: \(error.localizedDescription). Free up storage and try again."

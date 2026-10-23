@@ -2,8 +2,9 @@ import Foundation
 import Security
 
 /// Minimal generic-password wrapper for the app's few secrets (the Mac-sync
-/// pairing token and vocabulary request headers). Device-only, available
-/// after first unlock so auto-push keeps working in the background.
+/// pairing token and vocabulary request headers). On iOS: device-only,
+/// available after first unlock so auto-push keeps working in the
+/// background. On macOS: the login keychain, with its default access.
 enum KeychainStore {
     private static let service = "edu.davidson.luxicon"
 
@@ -31,7 +32,9 @@ enum KeychainStore {
         guard let value else { return }
         var add = base
         add[kSecValueData as String] = value
+        #if os(iOS)
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        #endif
         SecItemAdd(add as CFDictionary, nil)
     }
 

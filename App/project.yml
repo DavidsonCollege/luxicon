@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: edu.davidson
   deploymentTarget:
     iOS: "18.0"
+    macOS: "15.0"
 packages:
   Luxicon:
     path: ..
@@ -98,3 +99,54 @@ targets:
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         CODE_SIGN_STYLE: Automatic
         SKIP_INSTALL: true
+  LuxiconMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "15.0"
+    sources:
+      # Shares the iOS app's sources minus the iOS-only entry point, system
+      # integrations (BackgroundTasks, ActivityKit, App Intents), and phone
+      # navigation shell. Mac-only code lives in MacSources.
+      - path: Sources
+        excludes:
+          - LuxiconApp.swift
+          - ContinuedProcessing.swift
+          - RecordingActivityController.swift
+          - LuxiconIntents.swift
+          - Views/PeopleListView.swift
+          - Views/PersonDetailView.swift
+          - Views/OnboardingView.swift
+          - Views/QuickRecordPickerView.swift
+          - Views/RecordSheetView.swift
+      - MacSources
+      - Assets.xcassets
+      - Resources
+    dependencies:
+      - package: Luxicon
+        product: LuxiconKit
+    info:
+      path: MacInfo.plist
+      properties:
+        CFBundleDisplayName: Luxicon
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSApplicationCategoryType: public.app-category.productivity
+        NSMicrophoneUsageDescription: >-
+          Luxicon records your 1-on-1 meetings so it can transcribe them.
+          All processing happens on this Mac; audio never leaves it.
+    settings:
+      base:
+        PRODUCT_NAME: Luxicon
+        PRODUCT_BUNDLE_IDENTIFIER: edu.davidson.luxicon.mac
+        DEVELOPMENT_TEAM: 4Z539UE4TT
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
+        ARCHS: arm64
+        ENABLE_HARDENED_RUNTIME: YES
+        # Developer ID (direct distribution, no provisioning profile) for
+        # every configuration, so local builds carry the same signature
+        # shape as the notarized release.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Developer ID Application"
+        CODE_SIGN_ENTITLEMENTS: LuxiconMac.entitlements

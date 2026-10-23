@@ -146,6 +146,11 @@ final class Store {
     @ObservationIgnored nonisolated(unsafe) private var protectedDataObserver: NSObjectProtocol?
     /// Set when persisting the library fails (e.g. storage full).
     var saveError: String?
+    #if os(macOS)
+    /// Set when writing a finished session into ~/Luxicon fails; cleared by
+    /// the next successful write. Transient, not persisted.
+    var libraryError: String?
+    #endif
 
     struct HTTPHeader: Codable, Equatable, Identifiable {
         var id = UUID()
@@ -399,8 +404,18 @@ final class Store {
 
     func update(_ session: SessionRecord) {
         if let i = sessions.firstIndex(where: { $0.id == session.id }) {
+            #if os(macOS)
+            // writeLibraryFile owns libraryFileName; a caller's copy may
+            // predate its last write and must not erase the name.
+            var session = session
+            session.libraryFileName = sessions[i].libraryFileName
+            #endif
             sessions[i] = session
             save()
+            #if os(macOS)
+            // Finished sessions mirror into ~/Luxicon (no-op until .ready).
+            writeLibraryFile(for: session)
+            #endif
         }
     }
 
@@ -410,6 +425,10 @@ final class Store {
     }
 
     func deleteSession(_ session: SessionRecord) {
+        #if os(macOS)
+        // Before removing the record: it holds the library file's name.
+        deleteLibraryFile(for: session)
+        #endif
         sessions.removeAll { $0.id == session.id }
         try? FileManager.default.removeItem(at: audioURL(for: session))
         save()

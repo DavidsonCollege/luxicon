@@ -10,7 +10,7 @@ import Foundation
 /// Person attribution, in priority order: the bundle's `personName`, the
 /// session title's "1-on-1 with X" suffix, the file's parent folder name.
 public struct TranscriptLibrary {
-    public struct Session {
+    public struct Session: Sendable {
         public var person: String
         public var transcript: MeetingTranscript
         public var summary: SessionSummary?

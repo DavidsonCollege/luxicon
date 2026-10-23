@@ -14,6 +14,8 @@ Luxicon is a free, open-source service of
 Technology & Innovation team. If you like what you see, consider
 [giving to Davidson](https://www.davidson.edu/giving).
 
+https://github.com/user-attachments/assets/b202c150-017e-4551-bacd-7960681d45c4
+
 ## How it works
 
 1. **Enroll your voice once** (~15 seconds of reading aloud). Luxicon stores a

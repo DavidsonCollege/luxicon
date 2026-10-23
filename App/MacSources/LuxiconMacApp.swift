@@ -63,6 +63,8 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Writes store.json on first launch, so the location exists.
         store.save()
+        // Finished sessions whose ~/Luxicon file is missing or failed to write.
+        store.retryLibraryWrites()
         library.startWatching { [store] in Set(store.sessions.map(\.id)) }
         // A recording stopped by sleep is processed once the Mac is back.
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -77,19 +79,23 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
             await library.reload(ownedIds: ownedIds)
             #if DEBUG
             DebugLaunchOptions.seedIfRequested(store: store)
+            DebugLaunchOptions.deletePersonIfRequested(store: store)
             #endif
         }
     }
 
-    /// A store.json read that failed at launch is retried each time the app
-    /// comes forward; until it succeeds, saves are refused so the library on
-    /// disk is never replaced by blank state.
+    /// Each time the app comes forward: retry a store.json read that failed
+    /// at launch (until it succeeds, saves are refused so the library on disk
+    /// is never replaced by blank state), then retry library writes that
+    /// failed or whose files have gone missing since.
     func applicationDidBecomeActive(_ notification: Notification) {
-        guard store.loadPending else { return }
-        store.retryPendingLoad()
-        if !store.loadPending {
-            Task { await library.reload(ownedIds: ownedIds) }
+        if store.loadPending {
+            store.retryPendingLoad()
+            if !store.loadPending {
+                Task { await library.reload(ownedIds: ownedIds) }
+            }
         }
+        store.retryLibraryWrites()
     }
 
     /// Closing the main window doesn't quit: the app keeps watching

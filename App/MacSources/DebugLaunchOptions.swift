@@ -19,6 +19,8 @@ import LuxiconKit
 ///   `myName`, through the avatar pickers' downscale-and-save path.
 /// - `-seedSessionFromWAV <wav> <name>`: a recorded session for that person
 ///   (created if needed), run through the real pipeline.
+/// - `-deletePersonNamed <name>`: once the library has loaded, delete that
+///   person through `Store.deletePerson`, the sidebar's Delete… action.
 ///
 /// Screens (for `scripts/mac-screenshots.sh`):
 /// - `-route sidebar:all | sidebar:vocabulary | person:<uuid> | library:<name>
@@ -39,7 +41,7 @@ enum DebugLaunchOptions {
     private static let valueCounts: [String: Int] = [
         "-libraryPath": 1, "-storePath": 1,
         "-importPeople": 1, "-importVocabulary": 1, "-importPhotos": 1, "-myName": 1,
-        "-seedSessionFromWAV": 2,
+        "-seedSessionFromWAV": 2, "-deletePersonNamed": 1,
         "-route": 1, "-windowSize": 1, "-appearance": 1,
         "-recordWith": 1, "-simulateMicrophone": 1, "-answerPromptWith": 1,
         "-simulateSleepAfter": 1, "-simulateCloseAfter": 1, "-simulateStopAfter": 1,
@@ -187,6 +189,24 @@ enum DebugLaunchOptions {
     }
 
     @MainActor private static var didSeed = false
+
+    /// `-deletePersonNamed <name>`: what the sidebar's Delete… confirmation
+    /// does, without the UI. Scratch locations only.
+    @MainActor
+    static func deletePersonIfRequested(store: Store) {
+        guard let name = value("-deletePersonNamed") else { return }
+        guard has("-libraryPath"), has("-storePath") else {
+            log("refused: -deletePersonNamed needs both -libraryPath and -storePath")
+            return
+        }
+        guard let person = store.people.first(where: { $0.name == name }) else {
+            log("deletePersonNamed: no person \(name)")
+            return
+        }
+        let count = store.sessions(for: person).count
+        store.deletePerson(person)
+        log("deletePersonNamed: deleted \(name) and \(count) session(s)")
+    }
 
     /// `-seedSessionFromWAV <wav> <name>`: turn a WAV into a recorded
     /// session for that person and run the real pipeline on it, so the

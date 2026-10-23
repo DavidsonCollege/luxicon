@@ -22,6 +22,16 @@ extension View {
         modifier(ReadingRowInset())
     }
 
+    /// Selectable text on macOS (transcripts and summaries, matching the
+    /// library's read-only views); iOS keeps its existing behavior.
+    func macTextSelection() -> some View {
+        #if os(macOS)
+        textSelection(.enabled)
+        #else
+        self
+        #endif
+    }
+
     /// Compact navigation title: inline on iOS; macOS has no large titles.
     func inlineNavigationTitle() -> some View {
         #if os(iOS)
@@ -114,9 +124,9 @@ extension Image {
 }
 
 enum Pasteboard {
-    /// Copy plain text. On iOS it is local-only and expiring: transcripts
-    /// shouldn't hop devices via Universal Clipboard or linger in the
-    /// pasteboard indefinitely.
+    /// Copy plain text, local-only: transcripts shouldn't hop devices via
+    /// Universal Clipboard. On iOS it also expires, so it doesn't linger in
+    /// the pasteboard indefinitely.
     static func copy(_ text: String) {
         #if os(iOS)
         UIPasteboard.general.setItems(
@@ -126,8 +136,11 @@ enum Pasteboard {
                 .expirationDate: Date().addingTimeInterval(10 * 60),
             ])
         #else
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+        // Same intent on the Mac: keep it off Universal Clipboard (the
+        // current-host-only option also clears the previous contents).
+        let pasteboard = NSPasteboard.general
+        pasteboard.prepareForNewContents(with: .currentHostOnly)
+        pasteboard.setString(text, forType: .string)
         #endif
     }
 }

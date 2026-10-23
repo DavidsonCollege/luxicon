@@ -147,9 +147,11 @@ final class Store {
     /// Set when persisting the library fails (e.g. storage full).
     var saveError: String?
     #if os(macOS)
-    /// Set when writing a finished session into ~/Luxicon fails; cleared by
-    /// the next successful write. Transient, not persisted.
-    var libraryError: String?
+    /// Why a finished session's file in ~/Luxicon could not be written, by
+    /// session id; cleared by that session's next successful write. Shown on
+    /// the session's row and detail, and retried at launch and whenever the
+    /// app becomes active. Transient, not persisted.
+    var libraryWriteErrors: [UUID: String] = [:]
     #endif
 
     struct HTTPHeader: Codable, Equatable, Identifiable {
@@ -254,9 +256,19 @@ final class Store {
 
     /// One-time recovery passes that must only run against real library
     /// state — after a successful (possibly deferred) load, never before.
+    ///
+    /// This runs on the Mac too, where nothing is sandboxed: anything that
+    /// touches a location outside this store's own directory must be gated
+    /// to the platform it belongs to.
     private func finishStartup() {
+        #if os(iOS)
         // Builds 1-9 cached the old Qwen summarizer (~400 MB); reclaim it.
+        // iOS only: there the cache is the app's own container. On the Mac it
+        // is the user-wide ~/Library/Caches/qwen3-speech/, shared with
+        // luxicon-cli, luxicon-mcp, and other tools, and the Mac app never
+        // downloaded these models.
         removeLegacySummaryModel()
+        #endif
         // Recover sessions stuck mid-processing by an app kill.
         for i in sessions.indices where sessions[i].status == .processing {
             sessions[i].status = .recorded

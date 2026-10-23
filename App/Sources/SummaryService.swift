@@ -90,16 +90,20 @@ extension Store {
         Task { await SummaryService.shared.unloadModel() }
     }
 
+    #if os(iOS)
     /// One-time cleanup: earlier builds downloaded in-process summarizer
     /// weights (Qwen3.5 through build 9, Gemma 4 through 2026-07 — up to
     /// ~2.5 GB). Dead space now that summaries use the system model; deletes
     /// only those models' directories — ASR/diarization caches are untouched.
+    /// iOS only: on the Mac that cache is user-wide and shared with other
+    /// tools (see `Store.finishStartup`).
     func removeLegacySummaryModel() {
         for dir in MeetingSummarizer.legacyModelCacheDirectories()
         where FileManager.default.fileExists(atPath: dir.path) {
             try? FileManager.default.removeItem(at: dir)
         }
     }
+    #endif
 
     /// Generate (or regenerate) the summary for a transcribed session.
     /// GPU-bound like transcription: cancelled on backgrounding, retried

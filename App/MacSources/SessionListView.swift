@@ -317,6 +317,9 @@ struct SessionListView: View {
                     if record.listLabel == nil, let line = SessionCatalog.summaryFirstLine(record.summary) {
                         Text(line).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
+                    if let problem = store.libraryWriteErrors[record.id] {
+                        LibraryWriteWarning.badge(problem)
+                    }
                 }
             case .library(let session, _):
                 VStack(alignment: .leading, spacing: 2) {
@@ -407,6 +410,21 @@ struct SessionListView: View {
             store.deleteOrphanLibraryFile(session)
             Task { await library.reload(ownedIds: Set(store.sessions.map(\.id))) }
         }
+    }
+}
+
+/// A Mac session whose file in ~/Luxicon could not be written, so Claude
+/// (via the MCP server) can't see it. The row shows a badge; the detail view
+/// shows the reason with a Try Again button.
+enum LibraryWriteWarning {
+    static let title = "Not saved to ~/Luxicon"
+
+    static func badge(_ problem: String) -> some View {
+        Label(title, systemImage: "exclamationmark.triangle.fill")
+            .font(.caption)
+            .foregroundStyle(.orange)
+            .lineLimit(1)
+            .help(problem)
     }
 }
 

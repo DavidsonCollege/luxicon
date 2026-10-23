@@ -9,6 +9,7 @@ import os
 /// deletes a library file only when that file's envelope says
 /// `"source": "mac"` with this session's id. Anything else at a name the Mac
 /// wants is left byte-for-byte alone, and the Mac writes beside it instead.
+/// The file-level checks live (and are tested) in LuxiconKit's `LibraryFiles`.
 extension Store {
     private static let libraryLog = Logger(subsystem: "edu.davidson.luxicon.mac", category: "library")
 
@@ -30,15 +31,15 @@ extension Store {
                 transcript, summary: session.summary,
                 sessionId: session.id, source: TranscriptExport.macSource)
         } catch {
-            reportLibraryError("Could not encode the session for ~/Luxicon: \(error.localizedDescription)")
+            reportLibraryError("Could not encode the session for ~/Luxicon: \(error.localizedDescription)",
+                               for: session.id)
             return
         }
 
         let base = libraryBaseFilename(for: session)
-        guard let name = Self.libraryCandidates(base: base).first(where: {
-            Self.isFree(dir.appendingPathComponent($0), for: session.id)
-        }) else {
-            reportLibraryError("Could not save to ~/Luxicon: other files already use the name \(base).")
+        guard let name = LibraryFiles.freeName(base: base, in: dir, for: session.id) else {
+            reportLibraryError("Other files in ~/Luxicon already use the name \(base) and its variants.",
+                               for: session.id)
             return
         }
 
@@ -49,7 +50,7 @@ extension Store {
             do {
                 try data.write(to: url, options: .atomic)
             } catch {
-                reportLibraryError("Could not save to ~/Luxicon: \(error.localizedDescription)")
+                reportLibraryError(error.localizedDescription, for: session.id)
                 return
             }
         }
@@ -58,7 +59,7 @@ extension Store {
         // drop the old file, but only if it is still this session's.
         if let old = session.libraryFileName, old != name {
             let oldURL = dir.appendingPathComponent(old)
-            if Self.isOwned(oldURL, by: session.id) {
+            if LibraryFiles.isOwned(oldURL, by: session.id) {
                 try? FileManager.default.removeItem(at: oldURL)
             }
         }
@@ -67,7 +68,34 @@ extension Store {
             sessions[i].libraryFileName = name
             save()
         }
-        libraryError = nil
+        if libraryWriteErrors[session.id] != nil {
+            libraryWriteErrors[session.id] = nil
+            #if DEBUG
+            DebugLaunchOptions.log("library write recovered for \(session.id.uuidString): \(name)")
+            #endif
+        }
+    }
+
+    /// Write again every finished session whose library file failed to
+    /// write, is missing (deleted, or ~/Luxicon itself removed), or sits
+    /// under a name it shouldn't (e.g. a rename whose move failed). Run at
+    /// launch and whenever the app becomes active. Unchanged files are not
+    /// rewritten (see `writeLibraryFile`), so this is cheap when all is well.
+    func retryLibraryWrites() {
+        let dir = LibraryLocation.url
+        for session in sessions where session.status == .ready && session.transcript != nil {
+            let needsWrite: Bool
+            if libraryWriteErrors[session.id] != nil {
+                needsWrite = true
+            } else if let name = session.libraryFileName {
+                let onDisk = FileManager.default.fileExists(atPath: dir.appendingPathComponent(name).path)
+                let expected = LibraryFiles.candidates(base: libraryBaseFilename(for: session)).contains(name)
+                needsWrite = !onDisk || !expected
+            } else {
+                needsWrite = true
+            }
+            if needsWrite { writeLibraryFile(for: session) }
+        }
     }
 
     /// Remove a session's library file(s). Only files the Mac wrote for this
@@ -77,14 +105,15 @@ extension Store {
         let dir = LibraryLocation.url
         // The recorded name, plus every name it could have used, in case the
         // record never got to store it (e.g. a save failed after the write).
-        var names = Self.libraryCandidates(base: libraryBaseFilename(for: stored))
+        var names = LibraryFiles.candidates(base: libraryBaseFilename(for: stored))
         if let recorded = stored.libraryFileName { names.insert(recorded, at: 0) }
         for name in Set(names) {
             let url = dir.appendingPathComponent(name)
-            if Self.isOwned(url, by: stored.id) {
+            if LibraryFiles.isOwned(url, by: stored.id) {
                 try? FileManager.default.removeItem(at: url)
             }
         }
+        libraryWriteErrors[stored.id] = nil
     }
 
     /// Remove a Mac-recorded library file whose store record is gone (an
@@ -95,7 +124,7 @@ extension Store {
               session.bundleIndex == nil else { return }
         // relativePath reaches files in subfolders too; isOwned still gates it.
         let url = LibraryLocation.url.appendingPathComponent(session.relativePath)
-        if Self.isOwned(url, by: id) {
+        if LibraryFiles.isOwned(url, by: id) {
             try? FileManager.default.removeItem(at: url)
         }
     }
@@ -129,39 +158,11 @@ extension Store {
             date: session.date, id: session.id)
     }
 
-    /// The phone's name for the session first, then ` (Mac)` variants for
-    /// when a file the Mac doesn't own already sits there.
-    private static func libraryCandidates(base: String) -> [String] {
-        let stem = base.hasSuffix(".json") ? String(base.dropLast(5)) : base
-        return [base, "\(stem) (Mac).json"] + (2...20).map { "\(stem) (Mac \($0)).json" }
-    }
-
-    /// Nothing at `url`, or a file this session already owns.
-    private static func isFree(_ url: URL, for id: UUID) -> Bool {
-        var isDirectory: ObjCBool = false
-        let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
-        if !exists {
-            // fileExists follows symlinks; never write over a dangling one.
-            return (try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)) == nil
-        }
-        return !isDirectory.boolValue && isOwned(url, by: id)
-    }
-
-    /// True only for a readable envelope with `"source": "mac"` and this
-    /// session's id. Unreadable, unparseable, phone, and other-session
-    /// files are never ours.
-    private static func isOwned(_ url: URL, by id: UUID) -> Bool {
-        struct Provenance: Decodable {
-            let sessionId: UUID?
-            let source: String?
-        }
-        guard let data = try? Data(contentsOf: url),
-              let provenance = try? JSONDecoder().decode(Provenance.self, from: data) else { return false }
-        return provenance.source == TranscriptExport.macSource && provenance.sessionId == id
-    }
-
-    private func reportLibraryError(_ message: String) {
-        Self.libraryLog.error("\(message, privacy: .public)")
-        libraryError = message
+    private func reportLibraryError(_ message: String, for id: UUID) {
+        Self.libraryLog.error("library write failed for \(id.uuidString, privacy: .public): \(message, privacy: .public)")
+        libraryWriteErrors[id] = message
+        #if DEBUG
+        DebugLaunchOptions.log("library write failed for \(id.uuidString): \(message)")
+        #endif
     }
 }

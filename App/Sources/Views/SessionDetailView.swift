@@ -76,6 +76,9 @@ struct TranscriptView: View {
 
     var body: some View {
         List {
+            #if os(macOS)
+            libraryWriteSection
+            #endif
             summarySection
             #if os(iOS)
             // Pushing to a Mac is the phone's job; the Mac writes its own
@@ -111,6 +114,7 @@ struct TranscriptView: View {
                                 .foregroundStyle(.tertiary)
                         }
                         Text(turn.text)
+                            .macTextSelection()
                     }
                     .padding(.vertical, 2)
                     .readingRow()
@@ -198,12 +202,36 @@ struct TranscriptView: View {
         }
     }
 
+    #if os(macOS)
+    /// Shown only when this session's file in ~/Luxicon failed to write.
+    @ViewBuilder
+    private var libraryWriteSection: some View {
+        if let problem = store.libraryWriteErrors[session.id] {
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(LibraryWriteWarning.title, systemImage: "exclamationmark.triangle.fill")
+                        .font(.headline)
+                        .foregroundStyle(.orange)
+                    Text("Claude can't see this session until it is saved there. \(problem)")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                    Button("Try Again") { store.writeLibraryFile(for: session) }
+                }
+                .padding(.vertical, 4)
+                .readingRow()
+            }
+        }
+    }
+    #endif
+
     /// The Summary section's rows (a Group: `readingRow()` applies to each).
     private var summaryRows: some View {
         Group {
             if let summary = session.summary {
                 SummaryOverviewText(overview: summary.overview)
                     .padding(.vertical, 2)
+                    .macTextSelection()
                 if let summaryURL {
                     ShareLink(item: summaryURL) {
                         Label("Share Summary", systemImage: "square.and.arrow.up")

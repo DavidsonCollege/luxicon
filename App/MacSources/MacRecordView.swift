@@ -70,9 +70,8 @@ private struct MacRecordingSession: View {
                 }
                 .padding(.top, 8)
                 // Off the record, the overlay covers everything here, and
-                // VoiceOver shouldn't reach it behind the overlay either.
-                // (Per element: a hidden(false) container would un-hide the
-                // Space-to-stop button's own hidden(true).)
+                // VoiceOver shouldn't reach it behind the overlay either
+                // (each element below is hidden the same way).
                 .accessibilityHidden(isOffRecord)
 
                 captionPanel
@@ -117,14 +116,6 @@ private struct MacRecordingSession: View {
                 // a sub-second stop would create an unprocessable session.
                 .disabled(!canStop)
                 .accessibilityHidden(isOffRecord)
-                .background {
-                    // Space also stops (a second shortcut needs its own button).
-                    Button("Stop & Transcribe") { stopAndSave() }
-                        .keyboardShortcut(.space, modifiers: [])
-                        .disabled(!canStop)
-                        .opacity(0)
-                        .accessibilityHidden(true)
-                }
                 .padding(.horizontal)
 
                 HStack {
@@ -193,8 +184,9 @@ private struct MacRecordingSession: View {
         #endif
     }
 
-    /// Off the record, the stop button is covered, and its shortcuts
-    /// (⌘. and Space) must not reach it either.
+    /// Off the record, the stop button is covered, and its shortcut (⌘.)
+    /// must not reach it either. (No bare-key shortcut: a stray Space must
+    /// never end a live recording.)
     private var canStop: Bool {
         !saving && !finished && !isOffRecord && recorder.isRecording && recorder.duration >= 1
     }

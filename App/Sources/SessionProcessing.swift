@@ -117,6 +117,15 @@ extension Store {
             if var current = self.sessions.first(where: { $0.id == sessionId }) {
                 current.status = s.status
                 current.transcript = s.transcript
+                #if os(macOS)
+                // The transcript was titled from the record as it was when
+                // processing began. A person rename since then (Mac-only:
+                // renamePerson) retitled the stored record; keep the new
+                // title rather than writing back "1-on-1 with <old name>".
+                if current.title != s.title, current.transcript?.title == s.title {
+                    current.transcript?.title = current.title
+                }
+                #endif
                 current.summary = s.summary
                 current.listLabel = s.listLabel
                 current.errorMessage = s.errorMessage

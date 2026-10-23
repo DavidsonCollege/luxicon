@@ -8,11 +8,14 @@ import LuxiconKit
 ///
 /// `isMuted` (Mac only; the iPhone never sets it): off the record because the
 /// microphone is muted. The copy says so, and Resume is disabled — unmuting
-/// resumes the recording.
+/// resumes the recording. `onUnmute`, when the app-level (system) mute is
+/// on, adds an Unmute button that clears it in-app; a device's own hardware
+/// mute can only be undone on the device.
 struct OffRecordView: View {
     let personName: String
     let pausedAt: TimeInterval
     var isMuted = false
+    var onUnmute: (() -> Void)?
     let onResume: () -> Void
 
     // Fixed palette — deliberately not semantic colors (see doc comment).
@@ -88,7 +91,32 @@ struct OffRecordView: View {
 
                 Spacer()
 
-                if isMuted {
+                if isMuted, let onUnmute {
+                    // App-level mute: unmute here, and recording resumes.
+                    // Resume itself stays disabled (it would record silence).
+                    VStack(spacing: 10) {
+                        Button(action: onUnmute) {
+                            Label("Unmute Microphone", systemImage: "mic")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Self.resumeFill)
+                        .accessibilityHint("Recording resumes once the microphone is unmuted.")
+                        Button(action: onResume) {
+                            Label("Resume recording", systemImage: "record.circle")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(WaitingForUnmuteButtonStyle())
+                        .disabled(true)
+                        .accessibilityHint("Unmute your microphone to resume.")
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 28)
+                } else if isMuted {
                     // Resuming a muted mic would only record silence. A
                     // disabled prominent button all but vanishes on this
                     // background, so it's drawn as a readable outline.
@@ -137,6 +165,10 @@ extension OffRecordView {
     OffRecordView(personName: "Priya", pausedAt: 252, onResume: {})
 }
 
-#Preview("Muted") {
+#Preview("Muted (device)") {
     OffRecordView(personName: "Priya", pausedAt: 252, isMuted: true, onResume: {})
+}
+
+#Preview("Muted (system)") {
+    OffRecordView(personName: "Priya", pausedAt: 252, isMuted: true, onUnmute: {}, onResume: {})
 }

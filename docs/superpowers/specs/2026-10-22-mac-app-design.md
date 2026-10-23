@@ -177,13 +177,16 @@ The MCP server and library scan therefore ignore the file.
   (`macInputDeviceUID`), and falls back to the system default with a one-line
   note when the saved or captured device is missing. Switching mid-recording
   keeps the same file and session. (Added after v1 planning, JD 2026-10-23.)
-- Muting the mic takes the recording off the record (capture stopped, the
-  muted off-record screen) until it's unmuted. Two signals are watched: the
+- Muting the mic takes the recording off the record until it's unmuted:
+  capture is paused and nothing is recorded (the audio engine keeps running
+  but every sample is dropped, so the AirPods unmute gesture still reaches
+  the app), under the muted off-record screen. Two signals are watched: the
   system input mute (AirPods stem press, `AVAudioApplication`) and the
   captured device's own mute flag (`kAudioDevicePropertyMute`). A manual "Go
-  off the record" is never ended by unmuting; a recording that starts muted
-  starts off the record; Resume is disabled while muted. The state logic is
-  `OffRecordState` in LuxiconKit.
+  off the record" is never ended by unmuting (and still stops capture
+  fully); a recording that starts muted starts off the record; Resume is
+  disabled while muted, and the system mute can be cleared from the screen's
+  Unmute button. The state logic is `OffRecordState` in LuxiconKit.
 - Keep the Mac awake while recording and processing:
   `ProcessInfo.beginActivity(options: [.idleSystemSleepDisabled, .userInitiated])`,
   replacing the iOS `isIdleTimerDisabled` use in `SessionProcessing.swift`.

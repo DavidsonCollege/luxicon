@@ -9,12 +9,16 @@ import LuxiconKit
 /// - `.system`: the app's input mute, toggled by an AirPods / Beats stem
 ///   press or a headset's mute (`AVAudioApplication`). On macOS the app
 ///   implements muting itself: the system calls the handler registered
-///   with `setInputMuteStateChangeHandler`, and the handler must mute all
-///   input until it's called again, returning true once it has. Going off
-///   the record (capture stopped) is how Luxicon mutes, so the handler
-///   reports and returns true. The handler is the authoritative signal —
-///   `inputMuteStateChangeNotification` is only posted while a record
-///   session is active, so it's observed as a backup (state is idempotent).
+///   with `setInputMuteStateChangeHandler` (it should be set by the process
+///   doing the audio I/O), and the handler must mute all input samples
+///   until it's called again, returning true once it has. So the handler
+///   mutes synchronously (`onSystemMuteImmediate` → the recorder drops
+///   samples) before returning true, and the state/UI update follows on
+///   main. Capture keeps running while muted so the next gesture still
+///   reaches the app. `inputMuteStateChangeNotification` is only posted
+///   while a record session is active; it's observed as a backup (state is
+///   idempotent). The mute is per-process app state, so `stop()` clears it
+///   — a muted recording must not leave the next one muted.
 /// - `.device`: the captured device's own mute flag (`kAudioDevicePropertyMute`,
 ///   input scope, main element), e.g. a USB mic's mute button. Re-registered
 ///   whenever the captured device changes; devices without the property
@@ -24,6 +28,9 @@ final class InputMuteMonitor {
     typealias Source = OffRecordState.MuteSource
 
     var onChange: ((Source, Bool) -> Void)?
+    /// Called synchronously inside the system mute handler, on whatever
+    /// thread it runs, before the handler returns. Set before `start()`.
+    var onSystemMuteImmediate: (@Sendable (Bool) -> Void)?
     private var deviceListener: CoreAudioPropertyListener?
     private(set) var watchedDevice: AudioDeviceID?
     private var notificationObserver: NSObjectProtocol?
@@ -56,10 +63,14 @@ final class InputMuteMonitor {
     func start() {
         guard !isRunning else { return }
         isRunning = true
+        let immediate = onSystemMuteImmediate
         do {
             try AVAudioApplication.shared.setInputMuteStateChangeHandler { [weak self] shouldMute in
-                // Can arrive synchronously inside `setInputMuted` or on
-                // another thread: hop to main, never re-enter the caller.
+                // Mute the samples now, as the handler contract requires.
+                immediate?(shouldMute)
+                // The state and UI follow on main. The handler can arrive
+                // synchronously inside `setInputMuted` or on another thread:
+                // hop to main, never re-enter the caller.
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated { self?.report(.system, muted: shouldMute) }
                 }
@@ -101,8 +112,26 @@ final class InputMuteMonitor {
         report(.device, muted: isDeviceMuted)
     }
 
+    /// The muted overlay's Unmute: clear the app's input mute (the same
+    /// state an AirPods stem press toggles). The handler reports it.
+    func unmuteSystem() {
+        do {
+            try AVAudioApplication.shared.setInputMuted(false)
+        } catch {
+            log("setInputMuted(false) failed: \(error.localizedDescription)")
+        }
+    }
+
     func stop() {
         guard isRunning else { return }
+        // The app-wide mute outlives this recording otherwise, and the next
+        // one would start muted. Cleared while the handler is still set
+        // (its main-queue report is dropped: not running by then).
+        if isSystemMuted {
+            log("clearing the app's input mute at the end of the recording")
+            unmuteSystem()
+            log("app input mute now: \(isSystemMuted)")
+        }
         isRunning = false
         try? AVAudioApplication.shared.setInputMuteStateChangeHandler(nil)
         if let notificationObserver {

@@ -49,7 +49,7 @@ enum DebugLaunchOptions {
         "-simulateQuitAfter": 1, "-simulatePermissionDelay": 1,
         "-simulateMuteAt": 1, "-simulateUnmuteAt": 1, "-simulateMuteSource": 1, "-simulateStartMuted": 1,
         "-simulateManualOffAt": 1, "-simulateManualResumeAt": 1, "-selectInputNamed": 2,
-        "-simulateInputGoneAt": 1,
+        "-simulateInputGoneAt": 1, "-simulateUnmuteButtonAt": 1,
     ]
 
     /// Flag → its values (empty for a valueless flag).

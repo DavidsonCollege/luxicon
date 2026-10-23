@@ -50,10 +50,15 @@ enum InputDevicePreference {
 /// The record window's input side: which microphone is captured (the
 /// picker, the saved choice, falling back when a device is missing or
 /// unplugged) and whether the recording is off the record (by hand or
-/// because the mic is muted). It drives the `Recorder` through its explicit
-/// `pause()` / `resume()` — mute-driven resumes go through the same call a
-/// Resume click does, so the recorder's "off the record never resumes on
-/// its own" invariant still holds.
+/// because the mic is muted). `OffRecordState` decides; the recorder acts
+/// per reason:
+///
+/// - manual: capture fully stopped (`pause()`), as before; only Resume
+///   restarts it, through the explicit `resume()`.
+/// - muted (either source): capture keeps running but every sample is
+///   dropped (`setDiscardingInput(true)`): nothing is tallied, written, or
+///   captioned. The engine stays up because the system routes the AirPods
+///   unmute gesture to the app doing input I/O.
 @Observable @MainActor
 final class RecordingInputController {
     let deviceList = AudioInputDeviceList()
@@ -78,6 +83,7 @@ final class RecordingInputController {
     /// Last known name of the current device, for the note after it's gone.
     @ObservationIgnored private var currentDeviceName: String?
     @ObservationIgnored private var isStopped = false
+    @ObservationIgnored private var loggedMode: OffRecordState.Mode = .recording
 
     var currentDevice: AudioInputDevice? { deviceList.device(id: currentDeviceID) }
 
@@ -98,6 +104,10 @@ final class RecordingInputController {
         muteMonitor.onChange = { [weak self] source, muted in
             self?.apply(.muteChanged(source: source, muted: muted))
         }
+        // The system mute handler must mute the samples before it returns.
+        muteMonitor.onSystemMuteImmediate = { [recorder] muted in
+            if muted { recorder.setDiscardingInput(true) }
+        }
         muteMonitor.start()
         muteMonitor.watchDevice(currentDeviceID)
         #if DEBUG
@@ -107,14 +117,16 @@ final class RecordingInputController {
         }
         #endif
         offRecord = OffRecordState(mutedSources: muteMonitor.mutedSources)
-        if offRecord.shouldCapture {
-            try recorder.start(writingTo: fileURL)
-        } else {
-            log("microphone muted at start: recording starts off the record")
-            try recorder.startOffRecord(writingTo: fileURL)
+        log("mute at start: system=\(muteMonitor.isSystemMuted) device=\(muteMonitor.isDeviceMuted)")
+        // Muted at start: capture starts, already dropping every sample.
+        recorder.setDiscardingInput(offRecord.isMuted)
+        if offRecord.isMuted {
+            log("microphone muted at start: recording starts off the record (input discarded)")
         }
+        try recorder.start(writingTo: fileURL)
         hasStarted = true
-        isOffRecord = recorder.isPaused
+        loggedMode = offRecord.mode
+        isOffRecord = !offRecord.shouldCapture
         refresh()
     }
 
@@ -145,19 +157,44 @@ final class RecordingInputController {
     /// Make the recorder match the state, through its explicit calls only.
     private func syncRecorder() {
         guard let recorder, recorder.isRecording else { return }
-        if offRecord.shouldCapture {
-            if recorder.isPaused {
-                recorder.resume()
-                log(recorder.isPaused
-                    ? "resume failed; still off the record"
-                    : "back on the record at \(String(format: "%.1f", recorder.duration)) s")
-            }
-        } else if !recorder.isPaused {
-            recorder.pause()
-            log("off the record (\(offRecord.mode == .offRecord(reason: .muted) ? "muted" : "manual")) "
-                + "at \(String(format: "%.1f", recorder.duration)) s")
+        switch offRecord.mode {
+        case .offRecord(reason: .manual):
+            recorder.setDiscardingInput(offRecord.isMuted)
+            if !recorder.isPaused { recorder.pause() }
+        case .offRecord(reason: .muted):
+            // Drop samples first, then make sure the engine is running (a
+            // manual span ended by Resume while still muted restarts it).
+            recorder.setDiscardingInput(true)
+            if recorder.isPaused { recorder.resume() }
+        case .recording:
+            recorder.setDiscardingInput(false)
+            if recorder.isPaused { recorder.resume() }
         }
-        isOffRecord = recorder.isPaused
+        if offRecord.mode != loggedMode {
+            loggedMode = offRecord.mode
+            let at = "at \(String(format: "%.1f", recorder.duration)) s"
+            switch offRecord.mode {
+            case .recording:
+                log(recorder.isPaused ? "resume failed; still off the record" : "back on the record \(at)")
+            case .offRecord(reason: .manual):
+                log("off the record (manual; capture stopped) \(at)")
+            case .offRecord(reason: .muted):
+                log("off the record (muted; capture running, input discarded) \(at)")
+            }
+        }
+        isOffRecord = !offRecord.shouldCapture || recorder.isPaused
+    }
+
+    /// Whether the system (app-level) mute is one of the reasons the
+    /// recording is off: the overlay then offers Unmute.
+    var isSystemMuted: Bool { offRecord.mutedSources.contains(.system) }
+
+    /// The muted overlay's Unmute (system mute only; a device's hardware
+    /// mute is the device's to undo).
+    func unmuteSystem() {
+        guard !isStopped else { return }
+        log("unmuting the app's microphone input")
+        muteMonitor.unmuteSystem()
     }
 
     // MARK: - Devices
@@ -166,9 +203,6 @@ final class RecordingInputController {
     /// mid-recording).
     func select(_ device: AudioInputDevice) {
         guard device.id != currentDeviceID || pinnedID == nil else { return }
-        InputDevicePreference.save(device)
-        pinnedID = device.id
-        deviceNote = nil
         if let recorder, recorder.isRecording {
             do {
                 try recorder.setInputDevice(device.id)
@@ -179,6 +213,11 @@ final class RecordingInputController {
                 return
             }
         }
+        // Remembered and pinned only once capture has actually moved (or,
+        // before the recording starts, will use it).
+        InputDevicePreference.save(device)
+        pinnedID = device.id
+        deviceNote = nil
         log("selected \(device.name)")
         setCurrent(device.id)
     }

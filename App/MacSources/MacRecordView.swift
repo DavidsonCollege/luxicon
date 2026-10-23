@@ -153,6 +153,7 @@ private struct MacRecordingSession: View {
                 if isOffRecord {
                     OffRecordView(personName: person.name, pausedAt: recorder.duration,
                                   isMuted: input.offRecord.mode == .offRecord(reason: .muted),
+                                  onUnmute: input.isSystemMuted ? { input.unmuteSystem() } : nil,
                                   onResume: resumeRecording)
                         .transition(.opacity)
                 }

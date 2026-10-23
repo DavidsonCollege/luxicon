@@ -109,6 +109,10 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     /// same Save / Discard / Keep Recording question as closing it. Save
     /// finalizes the audio into a `.recorded` session before the app exits.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        #if DEBUG
+        DebugRecording.log("applicationShouldTerminate: recordingActive=\(store.processing.recordingActive), "
+            + "recording window \(navigation.recordingPerson == nil ? "closed" : "open")")
+        #endif
         guard store.processing.recordingActive, navigation.recordingPerson != nil else {
             return .terminateNow
         }

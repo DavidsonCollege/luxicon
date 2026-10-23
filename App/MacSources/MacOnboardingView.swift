@@ -6,11 +6,15 @@ import LuxiconKit
 struct MacOnboardingView: View {
     static let seenKey = "macOnboardingSeen"
 
-    /// Whether to show it at launch: first run. Never under DEBUG `-route`
-    /// automation; `-route onboarding` presents it once the window is sized.
+    /// Whether to show it at launch: first run. Never under DEBUG automation
+    /// (`-route`, `-recordWith`, or a scratch `-storePath`): its sheet would
+    /// block the run (an attached sheet holds up `terminate:`, so the ⌘Q
+    /// prompt never comes). `-route onboarding` presents it once the window
+    /// is sized.
     static var shouldShow: Bool {
         #if DEBUG
-        if DebugLaunchOptions.isRouted { return false }
+        if DebugLaunchOptions.isRouted || DebugLaunchOptions.has("-recordWith")
+            || DebugLaunchOptions.has("-storePath") { return false }
         #endif
         return !UserDefaults.standard.bool(forKey: seenKey)
     }

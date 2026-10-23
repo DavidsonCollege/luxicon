@@ -164,6 +164,19 @@ import Testing
         #expect(state.mode == .recording)
     }
 
+    @Test func deviceChangeWhileManuallyOffAndDeviceMutedStaysManual() {
+        var state = OffRecordState()
+        state.apply(.manualPause)
+        state.apply(.muteChanged(source: .device, muted: true))
+        state.apply(.inputDeviceChanged)
+        #expect(state.mode == .offRecord(reason: .manual))
+        #expect(!state.mutedSources.contains(.device))
+        #expect(state.canManuallyResume)
+        // Nothing left muted: Resume goes straight back on the record.
+        state.apply(.manualResume)
+        #expect(state.mode == .recording)
+    }
+
     @Test func deviceChangeWhileRecordingChangesNothing() {
         var state = OffRecordState()
         state.apply(.inputDeviceChanged)

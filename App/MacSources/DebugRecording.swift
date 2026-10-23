@@ -45,6 +45,10 @@ import LuxiconKit
 ///   device source is injected where the device's mute flag would report.
 /// - `-simulateStartMuted system|device|both`: those sources are muted
 ///   before the recording starts.
+/// - `-recordTwice` (with `-recordWith`): once the first recording's window
+///   closes, record again in the same process.
+/// - `-simulateUnmuteButtonAt <s>`: click the muted overlay's Unmute
+///   (shown only while the system mute is on).
 /// - `-simulateManualOffAt <s>` / `-simulateManualResumeAt <s>`: the
 ///   "Go Off the Record" button / the overlay's Resume.
 /// - `-selectInputNamed <name> <s>`: pick that input device in the picker.
@@ -147,6 +151,16 @@ enum DebugRecording {
         }
         log("requesting recording with \(person.name)")
         navigation.requestRecording(with: person)
+        guard DebugLaunchOptions.has("-recordTwice") else { return }
+        // A second recording in the same process, 2 s after the first
+        // window closes (the same timed hooks run again in it).
+        Task { @MainActor in
+            while navigation.recordingPerson == nil { try? await Task.sleep(for: .milliseconds(200)) }
+            while navigation.recordingPerson != nil { try? await Task.sleep(for: .milliseconds(200)) }
+            try? await Task.sleep(for: .seconds(2))
+            log("-recordTwice: requesting a second recording with \(person.name)")
+            navigation.requestRecording(with: person)
+        }
     }
 
     /// Fire the timed hooks once the recording has captured enough audio.
@@ -217,6 +231,7 @@ enum DebugRecording {
 
     private static let inputHookFlags = [
         "-simulateMuteAt", "-simulateUnmuteAt", "-simulateStartMuted", "-simulateManualOffAt",
+        "-simulateUnmuteButtonAt",
         "-simulateManualResumeAt", "-selectInputNamed", "-simulateInputGoneAt",
     ]
 
@@ -248,6 +263,12 @@ enum DebugRecording {
             pending.append((at, {
                 log("simulating unmute (\(sources.map(\.rawValue).joined(separator: "+")))")
                 sources.forEach { input.debugSimulateMute($0, muted: false) }
+            }))
+        }
+        if let at = seconds(after: "-simulateUnmuteButtonAt") {
+            pending.append((at, {
+                log("simulating the overlay's Unmute (shown: \(input.isSystemMuted))")
+                if input.isSystemMuted { input.unmuteSystem() }
             }))
         }
         if let at = seconds(after: "-simulateManualOffAt") {
@@ -300,7 +321,8 @@ enum DebugRecording {
                 }
                 log("tick wall=\(String(format: "%.1f", now)) duration=\(String(format: "%.1f", recorder.duration)) "
                     + "state=\(mode) overlay=\(input.isOffRecord) paused=\(recorder.isPaused) "
-                    + "resumeEnabled=\(input.offRecord.canManuallyResume) "
+                    + "discarding=\(recorder.isDiscardingInput) level=\(String(format: "%.2f", recorder.level)) "
+                    + "resumeEnabled=\(input.offRecord.canManuallyResume) unmuteButton=\(input.isSystemMuted) "
                     + "device=\(input.currentDevice?.name ?? "none")"
                     + (input.deviceNote.map { " note=\"\($0)\"" } ?? ""))
             }

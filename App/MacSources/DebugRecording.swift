@@ -3,8 +3,9 @@ import AppKit
 import Foundation
 import LuxiconKit
 
-/// DEBUG-only launch arguments for exercising the record window without a
-/// person at the keyboard (or a microphone):
+/// DEBUG-only launch arguments (parsed by `DebugLaunchOptions`) for
+/// exercising the record window without a person at the keyboard (or a
+/// microphone):
 ///
 /// - `-recordWith <name>`: request a recording with that person at launch,
 ///   through the same path as ⌘N (needs `-libraryPath` and `-storePath`).
@@ -35,11 +36,8 @@ import LuxiconKit
 /// Progress is logged to stderr with a `[record]` prefix.
 @MainActor
 enum DebugRecording {
-    private static var arguments: [String] { ProcessInfo.processInfo.arguments }
-
     private static func value(after flag: String) -> String? {
-        guard let i = arguments.firstIndex(of: flag), i + 1 < arguments.count else { return nil }
-        return arguments[i + 1]
+        DebugLaunchOptions.value(flag)
     }
 
     private static func seconds(after flag: String) -> Double? {
@@ -50,7 +48,7 @@ enum DebugRecording {
         FileHandle.standardError.write(Data("[record] \(message)\n".utf8))
     }
 
-    static var noMicrophone: Bool { arguments.contains("-noMicrophone") }
+    static var noMicrophone: Bool { DebugLaunchOptions.has("-noMicrophone") }
 
     static func simulatedInput() -> [Float]? {
         guard let path = value(after: "-simulateMicrophone") else { return nil }
@@ -82,7 +80,7 @@ enum DebugRecording {
     }
 
     static func blockSaveIfAsked(store: Store, sessionId: UUID) {
-        guard arguments.contains("-simulateSaveFailure") else { return }
+        guard DebugLaunchOptions.has("-simulateSaveFailure") else { return }
         let blocker = store.inProgressAudioURL(id: sessionId)
             .deletingLastPathComponent()
             .appendingPathComponent("\(sessionId.uuidString).wav")
@@ -97,7 +95,7 @@ enum DebugRecording {
         didRequest = true
         // A recording writes a session (and its library file): only ever
         // into scratch locations, never the real store or ~/Luxicon.
-        guard arguments.contains("-libraryPath"), arguments.contains("-storePath") else {
+        guard DebugLaunchOptions.has("-libraryPath"), DebugLaunchOptions.has("-storePath") else {
             log("refused: -recordWith needs both -libraryPath and -storePath")
             return
         }
@@ -120,7 +118,7 @@ enum DebugRecording {
             log("window frame \(window.frame.size), content \(window.contentLayoutRect.size), "
                 + "resizable \(window.styleMask.contains(.resizable)), title \"\(window.title)\"")
         }
-        if arguments.contains("-simulateEarlyClose") {
+        if DebugLaunchOptions.has("-simulateEarlyClose") {
             log("simulating the close button before recording starts")
             closeGuard.window?.performClose(nil)
         }

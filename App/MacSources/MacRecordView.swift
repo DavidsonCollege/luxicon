@@ -69,24 +69,37 @@ private struct MacRecordingSession: View {
                     LevelMeter(level: recorder.level)
                 }
                 .padding(.top, 8)
+                // Off the record, the overlay covers everything here, and
+                // VoiceOver shouldn't reach it behind the overlay either.
+                // (Per element: a hidden(false) container would un-hide the
+                // Space-to-stop button's own hidden(true).)
+                .accessibilityHidden(isOffRecord)
 
                 captionPanel
+                    .accessibilityHidden(isOffRecord)
 
                 VStack(spacing: 6) {
+                    // Decorative icons: VoiceOver reads just the text (the
+                    // hand symbol would otherwise be announced as "Block").
                     Label("Input: \(inputName ?? "No input device")", systemImage: "mic")
                         .font(.callout)
+                        .labelStyle(DecorativeIconLabelStyle())
                     Label("Make sure \(person.name) knows this conversation is being recorded.",
                           systemImage: "hand.raised")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .labelStyle(DecorativeIconLabelStyle())
                     Label("Keep the lid open — closing it stops recording.", systemImage: "laptopcomputer")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .labelStyle(DecorativeIconLabelStyle())
                 }
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
+                .accessibilityHidden(isOffRecord)
 
                 statusMessages
+                    .accessibilityHidden(isOffRecord)
 
                 Button {
                     stopAndSave()
@@ -103,6 +116,7 @@ private struct MacRecordingSession: View {
                 // The 1 s floor mirrors crash recovery's discard threshold:
                 // a sub-second stop would create an unprocessable session.
                 .disabled(!canStop)
+                .accessibilityHidden(isOffRecord)
                 .background {
                     // Space also stops (a second shortcut needs its own button).
                     Button("Stop & Transcribe") { stopAndSave() }
@@ -125,6 +139,7 @@ private struct MacRecordingSession: View {
                     .disabled(saving || !recorder.isRecording)
                 }
                 .padding(.horizontal)
+                .accessibilityHidden(isOffRecord)
             }
             .padding(.bottom, 20)
         }
@@ -548,6 +563,16 @@ private struct WindowAccessor: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if let window { onWindow?(window) }
+        }
+    }
+}
+
+/// Icon and title side by side, with the icon hidden from VoiceOver.
+private struct DecorativeIconLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 6) {
+            configuration.icon.accessibilityHidden(true)
+            configuration.title
         }
     }
 }

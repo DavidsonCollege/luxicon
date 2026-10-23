@@ -194,9 +194,8 @@ final class Store {
         return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         #else
         #if DEBUG
-        let args = ProcessInfo.processInfo.arguments
-        if let i = args.firstIndex(of: "-storePath"), i + 1 < args.count {
-            return URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)
+        if let path = DebugLaunchOptions.value("-storePath") {
+            return URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
         }
         #endif
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

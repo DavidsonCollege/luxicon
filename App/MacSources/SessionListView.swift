@@ -116,6 +116,17 @@ enum SessionCatalog {
         return TranscriptExport.summaryMarkdown(summary, transcript: content.transcript)
     }
 
+    /// "3 sessions from iPhone", or, when some are Mac files whose record
+    /// is gone, "3 from iPhone, 1 from Mac".
+    static func sourceCountText(_ items: [SessionItem]) -> String {
+        let fromMac = items.filter { if case .library(_, orphan: true) = $0.kind { true } else { false } }.count
+        let fromPhone = items.count - fromMac
+        let total = items.count == 1 ? "1 session" : "\(items.count) sessions"
+        guard fromMac > 0 else { return "\(total) from iPhone" }
+        guard fromPhone > 0 else { return "\(total) from Mac" }
+        return "\(fromPhone) from iPhone, \(fromMac) from Mac"
+    }
+
     /// First line of a summary for list rows, without markdown emphasis.
     static func summaryFirstLine(_ summary: SessionSummary?) -> String? {
         guard let summary else { return nil }
@@ -153,7 +164,7 @@ struct SessionListView: View {
         let query = navigation.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let results = query.isEmpty ? [] : search(query, in: items)
         VStack(spacing: 0) {
-            header(count: items.count)
+            header(items)
             List(selection: $navigation.session) {
                 if query.isEmpty {
                     ForEach(items) { item in
@@ -225,7 +236,8 @@ struct SessionListView: View {
     }
 
     @ViewBuilder
-    private func header(count: Int) -> some View {
+    private func header(_ items: [SessionItem]) -> some View {
+        let count = items.count
         switch navigation.sidebar {
         case .person(let id):
             if let person = store.person(id: id) {
@@ -272,7 +284,7 @@ struct SessionListView: View {
                     AvatarView(fileName: nil, name: name, size: 44)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(name).font(.title3.weight(.semibold))
-                        Text("^[\(count) session](inflect: true) from iPhone")
+                        Text(SessionCatalog.sourceCountText(items))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()

@@ -9,7 +9,19 @@ import AppKit
 // Small iOS/macOS seams for the views and services both app targets share.
 // Each shim keeps the iOS behavior exactly as it was at its call sites.
 
+extension EnvironmentValues {
+    /// macOS: how far `readingWidth()` insets each List row on either side
+    /// so its content sits in the centered reading column. Always 0 on iOS.
+    @Entry var readingInset: CGFloat = 0
+}
+
 extension View {
+    /// Inset a List row (or section header) to the reading column set up by
+    /// `readingWidth()` (macOS). A no-op on iOS, where the inset is 0.
+    func readingRow() -> some View {
+        modifier(ReadingRowInset())
+    }
+
     /// Compact navigation title: inline on iOS; macOS has no large titles.
     func inlineNavigationTitle() -> some View {
         #if os(iOS)
@@ -138,4 +150,21 @@ enum DeviceNoun {
     #else
     static let current = "Mac"
     #endif
+}
+
+private struct ReadingRowInset: ViewModifier {
+    @Environment(\.readingInset) private var inset
+
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        // macOS draws row separators from the content's leading edge to the
+        // List's trailing edge, which reads as stray lines beside a centered
+        // column; the reading-column rows go without them.
+        content
+            .padding(.horizontal, inset)
+            .listRowSeparator(.hidden)
+        #else
+        content
+        #endif
+    }
 }

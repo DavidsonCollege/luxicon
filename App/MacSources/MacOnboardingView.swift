@@ -6,10 +6,13 @@ import LuxiconKit
 struct MacOnboardingView: View {
     static let seenKey = "macOnboardingSeen"
 
-    /// Whether to show it at launch: first run, and not under `-route` automation.
+    /// Whether to show it at launch: first run. Never under DEBUG `-route`
+    /// automation; `-route onboarding` presents it once the window is sized.
     static var shouldShow: Bool {
-        !UserDefaults.standard.bool(forKey: seenKey)
-            && !ProcessInfo.processInfo.arguments.contains("-route")
+        #if DEBUG
+        if DebugLaunchOptions.isRouted { return false }
+        #endif
+        return !UserDefaults.standard.bool(forKey: seenKey)
     }
 
     @Environment(Store.self) private var store

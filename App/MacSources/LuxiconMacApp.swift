@@ -54,6 +54,12 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     let library = LibraryIndex()
     let navigation = MacNavigation()
 
+    #if DEBUG
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        DebugLaunchOptions.applyBeforeLaunch(store: store)
+    }
+    #endif
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Writes store.json on first launch, so the location exists.
         store.save()
@@ -70,7 +76,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         Task {
             await library.reload(ownedIds: ownedIds)
             #if DEBUG
-            DebugSeed.runIfRequested(store: store)
+            DebugLaunchOptions.seedIfRequested(store: store)
             #endif
         }
     }

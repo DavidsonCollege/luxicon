@@ -62,6 +62,9 @@ struct AvatarPicker: View {
                 }
         }
         .buttonStyle(.plain)
+        // Otherwise VoiceOver names it after the overlay symbol ("Camera").
+        .accessibilityLabel("Photo of \(name)")
+        .accessibilityHint("Choose a new photo")
         .contextMenu {
             if fileName != nil {
                 Button(role: .destructive) {

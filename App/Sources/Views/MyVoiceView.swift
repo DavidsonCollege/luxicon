@@ -245,6 +245,11 @@ struct MyVoiceView: View {
         .navigationTitle("My Voice")
         .sheet(isPresented: $showingAboutGiving) {
             AboutGivingView()
+                #if os(macOS)
+                // A Mac sheet sizes to its content's ideal size, which for
+                // this GeometryReader layout collapses to the button block.
+                .frame(width: 460, height: 600)
+                #endif
         }
         .alert("Microphone Access Is Off", isPresented: $showingMicDeniedAlert) {
             Button("Open \(Self.settingsAppName)") {

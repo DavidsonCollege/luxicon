@@ -23,17 +23,22 @@ struct SessionRow: View {
             switch session.status {
             case .recorded:
                 Image(systemName: "circle.dashed").foregroundStyle(.secondary)
+                    .accessibilityLabel("Not transcribed")
             case .processing:
                 ProgressView()
+                    .accessibilityLabel("Transcribing")
             case .ready:
                 #if os(iOS)
                 if !store.syncToken.isEmpty {
                     syncBadge
                 }
                 #endif
+                // Without a label, VoiceOver reads the symbol as "Selected".
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    .accessibilityLabel("Transcribed")
             case .failed:
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    .accessibilityLabel("Transcription failed")
             }
         }
     }

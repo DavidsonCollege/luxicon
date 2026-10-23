@@ -39,7 +39,7 @@ struct VoicePrintBanner: View {
             }
             #if DEBUG
             .task {
-                if ProcessInfo.processInfo.arguments.contains("-autoUseVoicePrint") { use(file) }
+                if DebugLaunchOptions.has("-autoUseVoicePrint") { use(file) }
             }
             #endif
         }

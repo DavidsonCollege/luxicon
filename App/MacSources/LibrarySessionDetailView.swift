@@ -23,16 +23,20 @@ struct LibrarySessionDetailView: View {
                         .foregroundStyle(.secondary)
                 }
                 .font(.callout)
+                .readingRow()
             }
             if let summary = session.summary {
-                Section("Summary") {
+                Section {
                     SummaryOverviewText(overview: summary.overview)
                         .padding(.vertical, 2)
                         .textSelection(.enabled)
+                        .readingRow()
+                } header: {
+                    Text("Summary").readingRow()
                 }
             }
-            Section("Talk time") {
-                ForEach(transcript.speakers, id: \.speakerId) { s in
+            Section {
+                ForEach(transcript.speakers, id: \.listID) { s in
                     HStack {
                         Text(s.displayName)
                         Spacer()
@@ -40,10 +44,13 @@ struct LibrarySessionDetailView: View {
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
+                    .readingRow()
                 }
+            } header: {
+                Text("Talk time").readingRow()
             }
-            Section("Transcript") {
-                ForEach(transcript.turns) { turn in
+            Section {
+                ForEach(transcript.turns, id: \.listID) { turn in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(turn.displayName).font(.caption.weight(.semibold))
@@ -55,7 +62,10 @@ struct LibrarySessionDetailView: View {
                             .textSelection(.enabled)
                     }
                     .padding(.vertical, 2)
+                    .readingRow()
                 }
+            } header: {
+                Text("Transcript").readingRow()
             }
         }
         .readingWidth()

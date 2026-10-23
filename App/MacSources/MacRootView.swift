@@ -99,10 +99,25 @@ final class MacNavigation {
 }
 
 extension View {
-    /// A comfortable text column (about 70 characters) instead of spanning
-    /// a wide window.
+    /// A comfortable text column (about 70 characters, at most 760 pt)
+    /// instead of spanning a wide window. Apply it to a List, and
+    /// `readingRow()` to its rows and section headers: the List keeps the
+    /// full column width, so scrolling, the background, and the scroll bar
+    /// reach the column's edges, while each row's content is inset to the
+    /// centered reading column.
     func readingWidth() -> some View {
-        frame(maxWidth: 760).frame(maxWidth: .infinity)
+        modifier(ReadingWidth())
+    }
+}
+
+private struct ReadingWidth: ViewModifier {
+    static let maxWidth: CGFloat = 760
+    @State private var width: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.readingInset, max(0, (width - Self.maxWidth) / 2))
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 }
 
@@ -159,7 +174,9 @@ struct MacRootView: View {
         }
         .task { DebugRecording.requestRecordingIfAsked(store: store, navigation: navigation) }
         .task {
-            if ProcessInfo.processInfo.arguments.contains("-openSettings") { openSettings() }
+            if DebugLaunchOptions.has("-openSettings") { openSettings() }
+            DebugLaunchOptions.applyRoute(store: store, navigation: navigation, openSettings: openSettings,
+                                          showOnboarding: { showingOnboarding = true })
         }
         #endif
         .alert("Library Problem", isPresented: Binding(

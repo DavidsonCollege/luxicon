@@ -13,9 +13,8 @@ enum LibraryLocation {
         var url = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Luxicon", isDirectory: true)
         #if DEBUG
-        let args = ProcessInfo.processInfo.arguments
-        if let i = args.firstIndex(of: "-libraryPath"), i + 1 < args.count {
-            url = URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)
+        if let path = DebugLaunchOptions.value("-libraryPath") {
+            url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
         }
         #endif
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)

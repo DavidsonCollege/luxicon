@@ -42,6 +42,7 @@ struct OffRecordView: View {
                         .font(.system(size: 52))
                         .foregroundStyle(Self.accent)
                 }
+                .accessibilityHidden(true)
 
                 Text("OFF THE RECORD")
                     .font(.caption.weight(.semibold))

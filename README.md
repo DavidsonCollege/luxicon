@@ -60,8 +60,10 @@ the same `~/Luxicon` library the phone pushes into and the MCP server reads.
   [GitHub Releases](https://github.com/DavidsonCollege/luxicon/releases) page
   (look for tags starting `mac-v`). Open the DMG and drag Luxicon to
   Applications.
-- **Shared library:** sessions from the Mac app, from phone pushes, and from
-  `luxicon-cli` all live in `~/Luxicon`.
+- **Shared library:** sessions from the Mac app and from phone pushes all live
+  in `~/Luxicon`. (`luxicon-cli` doesn't write there itself: it writes to its
+  `--out` folder, or `luxicon-cli push` sends a file through the listener like
+  the phone does.)
 - **Voice print:** import the voice print you enrolled on your iPhone (My Voice
   → Mac sync → Send My Voice to Mac) so the Mac labels you automatically.
 - **Privacy:** same posture as the phone app. Audio and transcripts stay on

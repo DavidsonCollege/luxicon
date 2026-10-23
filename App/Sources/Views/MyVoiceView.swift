@@ -210,7 +210,7 @@ struct MyVoiceView: View {
             } header: {
                 Text("Mac sync")
             } footer: {
-                Text("Send transcripts and summaries to a Mac running `luxicon-mcp listen`, so you can query them from Claude. Everything stays on your local network. Use “Send installer link to your Mac” to AirDrop the listener installer over, then enter the Mac's address if it isn't found automatically (common on enterprise Wi-Fi that blocks discovery). Send My Voice to Mac copies only your voice fingerprint, and only when you tap it.")
+                Text("Send transcripts and summaries to a Mac running `luxicon-mcp listen`, so you can query them from Claude. Everything stays on your local network. Use “Send installer link to your Mac” to AirDrop the listener installer over, then enter the Mac's address if it isn't found automatically (common on enterprise Wi-Fi that blocks discovery). Send My Voice to Mac copies your voice fingerprint and name, and only when you tap it.")
             }
             #endif
 

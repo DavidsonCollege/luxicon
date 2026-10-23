@@ -1,6 +1,6 @@
 # Luxicon privacy policy
 
-*Effective 2026-07-14.*
+*Effective 2026-07-14; Mac section added 2026-10-23.*
 
 Luxicon is built so that your conversations stay yours.
 
@@ -16,6 +16,26 @@ embedding, not audio), your people list, and your vocabulary are stored in
 the app's private container on your device. They are protected with iOS
 Data Protection and are included in your standard iPhone backup (encrypted
 by Apple; end-to-end encrypted if you enable Advanced Data Protection).
+
+## What stays on your Mac (Luxicon for Mac)
+
+The Mac app records and transcribes on the Mac itself, entirely on-device,
+the same way the iPhone app does.
+
+- Its own state (recordings, transcripts, summaries, your voice
+  fingerprint, your people list, and your vocabulary) is stored in
+  `~/Library/Application Support/Luxicon` in your user account.
+- Finished sessions are also written to the shared `~/Luxicon` library
+  folder, alongside sessions your iPhone pushes there, so local tools you
+  run (such as the Luxicon MCP server for Claude) can read them.
+- These are ordinary files in your user account. They are not protected by
+  iOS Data Protection; turn on FileVault to encrypt them at rest. They are
+  included in Time Machine backups like the rest of your home folder.
+- The microphone is used only while you are recording.
+- The Mac app adds no network connections beyond those listed below (it
+  downloads the same speech models, and URL sync works the same way when
+  you turn it on). Sessions from your iPhone reach the Mac only through the
+  opt-in Mac sync below.
 
 ## Network connections the app makes
 

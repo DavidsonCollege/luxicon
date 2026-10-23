@@ -25,8 +25,9 @@ xcodebuild -project Luxicon.xcodeproj -scheme Luxicon \
 # ~/Library/Application Support/Luxicon/; Debug builds take `-storePath <dir>`.
 xcodebuild -project Luxicon.xcodeproj -scheme LuxiconMac \
   -destination 'platform=macOS,arch=arm64' -configuration Debug build
-# Add -skipPackagePluginValidation -skipMacroValidation to every xcodebuild call
-# on this machine (package plugins/macros otherwise fail trust validation).
+# Add -skipPackagePluginValidation -skipMacroValidation to xcodebuild calls on
+# machines where package plugin/macro validation isn't pre-trusted (otherwise
+# they fail trust validation).
 # Fresh Xcode installs also need the Metal Toolchain once:
 #   xcodebuild -downloadComponent MetalToolchain
 # App/MacSources is Mac-only; App/Sources is shared with iOS, so anything added
@@ -68,5 +69,8 @@ Constraints that aren't obvious from any single file:
 
 - **Persistence back-compat:** `Store.Persisted` and `SessionRecord` decode existing `store.json` files from released builds. New fields must be optionals (or have defaults applied in `load()`); never rename or repurpose existing keys. Secrets (pairing token, sync auth headers) live in the Keychain, not `store.json`.
 - **Tests cover LuxiconKit only.** There is no app-target test bundle; app changes are verified by building and checking on a device. Tests must stay offline (no model downloads).
+- **`App/MacSources` is Mac-only; `App/Sources` is shared** by the iOS and Mac targets (minus the iOS-only files excluded in `project.yml`). Code added to `App/Sources` must compile and behave correctly on both.
+- **Shared startup/cleanup/recovery code runs on the Mac too**, unsandboxed, where paths like `~/Library/Caches/...` are user-wide and shared with `luxicon-cli`/`luxicon-mcp` and other tools rather than the app's own container. Gate iOS-legacy cleanup (e.g. `removeLegacySummaryModel`) with `#if os(iOS)`.
+- **`~/Luxicon` ownership rule (Mac app):** the library also holds the phone's pushed files. The Mac app never writes over, renames, or deletes a library file unless its envelope has `"source": "mac"` and its `sessionId` matches the session; otherwise it writes beside it (`… (Mac).json`). The file-level logic is LuxiconKit's `LibraryFiles` (tested in `LibraryFilesTests`); `App/MacSources/Store+Library.swift` must go through it.
 - **Wire-protocol changes** (`LuxiconSync`, `SyncPusher`, `SyncListener`) span the app and the installed Mac binary — after changing them, reinstall both sides or pushes fail in confusing ways.
 - The privacy posture in README.md is load-bearing App Store copy: everything is on-device; the only network features are opt-in Mac sync (LAN-only) and https-only vocabulary/people URL sync. Don't add network calls outside those paths. (User-initiated link-outs that open in Safari — the giving screen's davidson.edu/giving and GitHub links — are fine and deliberate: App Store rule 3.2.1 requires donations to happen outside the app.)

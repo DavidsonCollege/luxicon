@@ -215,7 +215,7 @@ Other Mac conventions:
   Mac Sync (listener status and token), About/Giving, Acknowledgements.
   This reuses the existing views as `Form`s with `.formStyle(.grouped)`.
 - **Menus and shortcuts:** ⌘N New Recording (asks for the person if none is
-  selected), ⌘. or Space to stop while the recording window is key, ⌘F search
+  selected), ⌘. to stop while the recording window is key (no bare-key stop: a stray Space must never end a recording), ⌘F search
   sessions (use `TranscriptLibrary.search`), ⌘C/⌘⇧C copy transcript or summary.
   Use `NSPasteboard` instead of `UIPasteboard`. Delete key deletes a Mac session
   (with confirmation).

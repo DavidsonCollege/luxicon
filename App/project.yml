@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: edu.davidson
   deploymentTarget:
     iOS: "18.0"
+    macOS: "15.0"
 packages:
   Luxicon:
     path: ..
@@ -11,7 +12,7 @@ settings:
     # One version train for the app and every extension: App Store validation
     # rejects uploads whose extension CFBundleVersion differs from the app's.
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: 17
+    CURRENT_PROJECT_VERSION: 18
 targets:
   Luxicon:
     type: application
@@ -39,7 +40,8 @@ targets:
           All processing happens on this device; audio never leaves your phone.
         NSLocalNetworkUsageDescription: >-
           Luxicon uses the local network only if you set up Mac sync: to find
-          your Mac and send it the transcripts you choose to sync. Without Mac
+          your Mac and send it the transcripts you choose to sync, and, only when you
+          tap Send My Voice to Mac, your voice fingerprint and name. Without Mac
           sync, the local network is never used.
         NSBonjourServices:
           - _luxicon._tcp
@@ -97,3 +99,57 @@ targets:
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         CODE_SIGN_STYLE: Automatic
         SKIP_INSTALL: true
+  LuxiconMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "15.0"
+    sources:
+      # Shares the iOS app's sources minus the iOS-only entry point, system
+      # integrations (BackgroundTasks, ActivityKit, App Intents), and phone
+      # navigation shell. Mac-only code lives in MacSources.
+      - path: Sources
+        excludes:
+          - LuxiconApp.swift
+          - ContinuedProcessing.swift
+          - RecordingActivityController.swift
+          - LuxiconIntents.swift
+          - Views/PeopleListView.swift
+          - Views/PersonDetailView.swift
+          - Views/OnboardingView.swift
+          - Views/QuickRecordPickerView.swift
+          - Views/RecordSheetView.swift
+      - MacSources
+      - Assets.xcassets
+      # Mac-only catalog: the shared one's AppIcon is a single iOS 1024.
+      - MacAssets.xcassets
+      - Resources
+    dependencies:
+      - package: Luxicon
+        product: LuxiconKit
+    info:
+      path: MacInfo.plist
+      properties:
+        CFBundleDisplayName: Luxicon
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSApplicationCategoryType: public.app-category.productivity
+        NSMicrophoneUsageDescription: >-
+          Luxicon records your 1-on-1 meetings so it can transcribe them.
+          All processing happens on this Mac; audio never leaves it.
+    settings:
+      base:
+        PRODUCT_NAME: Luxicon
+        PRODUCT_BUNDLE_IDENTIFIER: edu.davidson.luxicon.mac
+        DEVELOPMENT_TEAM: 4Z539UE4TT
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
+        ARCHS: arm64
+        ENABLE_HARDENED_RUNTIME: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIconMac
+        # Developer ID (direct distribution, no provisioning profile) for
+        # every configuration, so local builds carry the same signature
+        # shape as the notarized release.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Developer ID Application"
+        CODE_SIGN_ENTITLEMENTS: LuxiconMac.entitlements

@@ -97,4 +97,68 @@ import Foundation
         #expect(trend.count == 1)
         #expect(abs((trend[0].personShare ?? 0) - 49.0 / 119.0) < 0.001)
     }
+
+    @Test func exportWithoutProvenanceIsUnchanged() throws {
+        let data = try TranscriptExport.json(transcript(title: "1-on-1 with Sam", day: 0), summary: nil)
+        let dict = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(dict["sessionId"] == nil)
+        #expect(dict["source"] == nil)
+    }
+
+    @Test func exportWithProvenanceRoundTrips() throws {
+        let id = UUID()
+        let data = try TranscriptExport.json(
+            transcript(title: "1-on-1 with Sam", day: 0),
+            sessionId: id, source: TranscriptExport.macSource)
+        let sessions = TranscriptLibrary.parse(data, sourceFile: "a.json", folderName: nil)
+        #expect(sessions.count == 1)
+        #expect(sessions[0].sessionId == id)
+        #expect(sessions[0].source == "mac")
+    }
+
+    @Test func badProvenanceDoesNotHideSession() throws {
+        let data = try TranscriptExport.json(transcript(title: "1-on-1 with Sam", day: 0))
+        var dict = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        dict["sessionId"] = 42
+        let bad = try JSONSerialization.data(withJSONObject: dict)
+        let sessions = TranscriptLibrary.parse(bad, sourceFile: "a.json", folderName: nil)
+        #expect(sessions.count == 1)
+        #expect(sessions[0].sessionId == nil)
+    }
+
+    @Test func libraryKeysAreUniqueAcrossSubfoldersAndBundles() throws {
+        struct Envelope: Encodable {
+            let schemaVersion = 1, kind = "one-on-one"
+            let transcript: MeetingTranscript
+        }
+        struct Bundle: Encodable {
+            let schemaVersion = 1, kind = "one-on-one-bundle"
+            let personName: String
+            let transcripts: [MeetingTranscript]
+        }
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("libkeys-\(UUID().uuidString)", isDirectory: true)
+        let sub = dir.appendingPathComponent("Sam", isDirectory: true)
+        try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let single = encode(Envelope(transcript: transcript(title: "1-on-1 with Sam", day: 0)))
+        try single.write(to: dir.appendingPathComponent("a.json"))
+        try single.write(to: sub.appendingPathComponent("a.json"))
+        try encode(Bundle(personName: "Priya", transcripts: [
+            transcript(title: "Weekly", day: 1), transcript(title: "Weekly", day: 2),
+        ])).write(to: dir.appendingPathComponent("b.json"))
+
+        let sessions = TranscriptLibrary.load(from: dir).sessions
+        #expect(sessions.count == 4)
+        #expect(Set(sessions.map(\.libraryKey)) == ["a.json", "Sam/a.json", "b.json#0", "b.json#1"])
+        #expect(sessions.first { $0.libraryKey == "Sam/a.json" }?.sourceFile == "a.json")
+        #expect(sessions.first { $0.libraryKey == "b.json#1" }?.relativePath == "b.json")
+    }
+
+    @Test func parsedSessionsDefaultRelativePathToSourceFile() {
+        let bare = encode(transcript(title: "1-on-1 with Sam", day: 0))
+        let session = TranscriptLibrary.parse(bare, sourceFile: "c.json", folderName: nil)[0]
+        #expect(session.relativePath == "c.json")
+        #expect(session.libraryKey == "c.json")
+    }
 }

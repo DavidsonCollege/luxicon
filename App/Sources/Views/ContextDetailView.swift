@@ -33,7 +33,7 @@ struct ContextDetailView: View {
             }
         }
         .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
         .onDisappear { onSave() }
     }
 }

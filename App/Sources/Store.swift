@@ -1,6 +1,8 @@
 import Foundation
 import Observation
+#if os(iOS)
 import UIKit
+#endif
 import LuxiconKit
 
 /// A direct report you hold 1-on-1s with.
@@ -57,6 +59,10 @@ struct SessionRecord: Codable, Identifiable, Equatable {
     /// so pre-existing store.json decodes unchanged.
     var lastPushDate: Date?
     var lastPushError: String?
+    /// Mac only: the session's file name in the shared ~/Luxicon library
+    /// once written there. Optional so pre-existing store.json decodes
+    /// unchanged.
+    var libraryFileName: String?
 
     var audioFileName: String { "\(id.uuidString).wav" }
 }
@@ -140,6 +146,13 @@ final class Store {
     @ObservationIgnored nonisolated(unsafe) private var protectedDataObserver: NSObjectProtocol?
     /// Set when persisting the library fails (e.g. storage full).
     var saveError: String?
+    #if os(macOS)
+    /// Why a finished session's file in ~/Luxicon could not be written, by
+    /// session id; cleared by that session's next successful write. Shown on
+    /// the session's row and detail, and retried at launch and whenever the
+    /// app becomes active. Transient, not persisted.
+    var libraryWriteErrors: [UUID: String] = [:]
+    #endif
 
     struct HTTPHeader: Codable, Equatable, Identifiable {
         var id = UUID()
@@ -175,7 +188,22 @@ final class Store {
         var peopleLastSync: Date?
     }
 
-    static let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    /// Root of all app state. iOS: the app's Documents container. macOS:
+    /// ~/Library/Application Support/Luxicon/ (DEBUG builds accept
+    /// `-storePath <dir>` to point a test run at a scratch library).
+    static let documentsURL: URL = {
+        #if os(iOS)
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        #else
+        #if DEBUG
+        if let path = DebugLaunchOptions.value("-storePath") {
+            return URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        }
+        #endif
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Luxicon", isDirectory: true)
+        #endif
+    }()
     static let storeURL = documentsURL.appendingPathComponent("store.json")
     static let audioDirURL = documentsURL.appendingPathComponent("audio", isDirectory: true)
     static let photosDirURL = documentsURL.appendingPathComponent("photos", isDirectory: true)
@@ -195,6 +223,7 @@ final class Store {
     init() {
         try? FileManager.default.createDirectory(at: Self.audioDirURL, withIntermediateDirectories: true)
         try? FileManager.default.createDirectory(at: Self.photosDirURL, withIntermediateDirectories: true)
+        #if os(iOS)
         // Data protection: new files inherit the directory's class, so the
         // library is unreadable while the device is locked. The live recording
         // stays writable because its file is already open (`completeUnlessOpen`).
@@ -203,8 +232,10 @@ final class Store {
                 [.protectionKey: FileProtectionType.completeUnlessOpen],
                 ofItemAtPath: url.path)
         }
+        #endif
         load()
         if !loadPending { finishStartup() }
+        #if os(iOS)
         // Locked-launch recovery: the moment the content becomes readable,
         // load for real. Registered unconditionally — the handler no-ops
         // unless a load is actually pending.
@@ -214,6 +245,7 @@ final class Store {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.retryPendingLoad() }
         }
+        #endif
     }
 
     deinit {
@@ -224,9 +256,19 @@ final class Store {
 
     /// One-time recovery passes that must only run against real library
     /// state — after a successful (possibly deferred) load, never before.
+    ///
+    /// This runs on the Mac too, where nothing is sandboxed: anything that
+    /// touches a location outside this store's own directory must be gated
+    /// to the platform it belongs to.
     private func finishStartup() {
+        #if os(iOS)
         // Builds 1-9 cached the old Qwen summarizer (~400 MB); reclaim it.
+        // iOS only: there the cache is the app's own container. On the Mac it
+        // is the user-wide ~/Library/Caches/qwen3-speech/, shared with
+        // luxicon-cli, luxicon-mcp, and other tools, and the Mac app never
+        // downloaded these models.
         removeLegacySummaryModel()
+        #endif
         // Recover sessions stuck mid-processing by an app kill.
         for i in sessions.indices where sessions[i].status == .processing {
             sessions[i].status = .recorded
@@ -348,7 +390,11 @@ final class Store {
         )
         do {
             let data = try JSONEncoder().encode(persisted)
+            #if os(iOS)
             try data.write(to: Self.storeURL, options: [.atomic, .completeFileProtectionUnlessOpen])
+            #else
+            try data.write(to: Self.storeURL, options: .atomic)
+            #endif
             saveError = nil
         } catch {
             saveError = "Could not save the session library: \(error.localizedDescription). Free up storage and try again."
@@ -369,8 +415,18 @@ final class Store {
 
     func update(_ session: SessionRecord) {
         if let i = sessions.firstIndex(where: { $0.id == session.id }) {
+            #if os(macOS)
+            // writeLibraryFile owns libraryFileName; a caller's copy may
+            // predate its last write and must not erase the name.
+            var session = session
+            session.libraryFileName = sessions[i].libraryFileName
+            #endif
             sessions[i] = session
             save()
+            #if os(macOS)
+            // Finished sessions mirror into ~/Luxicon (no-op until .ready).
+            writeLibraryFile(for: session)
+            #endif
         }
     }
 
@@ -380,6 +436,10 @@ final class Store {
     }
 
     func deleteSession(_ session: SessionRecord) {
+        #if os(macOS)
+        // Before removing the record: it holds the library file's name.
+        deleteLibraryFile(for: session)
+        #endif
         sessions.removeAll { $0.id == session.id }
         try? FileManager.default.removeItem(at: audioURL(for: session))
         save()

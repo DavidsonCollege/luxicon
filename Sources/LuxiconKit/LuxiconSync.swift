@@ -39,7 +39,25 @@ public enum LuxiconSync {
         }
     }
 
-    /// Strip anything that could escape the library directory.
+    /// Library filename for a session, shared by the phone's push and the Mac
+    /// app so both sides name (and dedupe) a session identically. Always
+    /// deterministic: a person name that is empty or would make a hidden
+    /// file (leading ".") becomes "session", rather than hitting
+    /// `sanitizedFilename`'s random fallback, which would rename the file on
+    /// every write.
+    public static func sessionFilename(person: String, date: Date, id: UUID) -> String {
+        var who = person
+            .components(separatedBy: CharacterSet(charactersIn: "/\\:"))
+            .joined(separator: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if who.isEmpty || who.hasPrefix(".") { who = "session" }
+        return sanitizedFilename("\(who) \(date.formatted(.iso8601.year().month().day())) \(id.uuidString.prefix(8)).json")
+    }
+
+    /// Strip anything that could escape the library directory. The listener
+    /// runs it on arbitrary incoming push names, so an empty or hidden-file
+    /// name (e.g. `.sync-token`) is never written as given: it gets a random
+    /// `session-<uuid>` name instead.
     public static func sanitizedFilename(_ name: String) -> String {
         let cleaned = name
             .components(separatedBy: CharacterSet(charactersIn: "/\\:"))

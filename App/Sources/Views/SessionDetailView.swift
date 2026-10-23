@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 import LuxiconKit
 
 /// One session: processing state, transcript, stats, export.
@@ -20,7 +19,7 @@ struct SessionDetailView: View {
             }
         }
         .navigationTitle(session?.date.formatted(date: .abbreviated, time: .omitted) ?? "Session")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 
     @ViewBuilder
@@ -77,10 +76,17 @@ struct TranscriptView: View {
 
     var body: some View {
         List {
+            #if os(macOS)
+            libraryWriteSection
+            #endif
             summarySection
+            #if os(iOS)
+            // Pushing to a Mac is the phone's job; the Mac writes its own
+            // sessions into ~/Luxicon directly.
             macSyncSection
-            Section("Talk time") {
-                ForEach(transcript.speakers, id: \.speakerId) { s in
+            #endif
+            Section {
+                ForEach(transcript.speakers, id: \.listID) { s in
                     HStack {
                         Text(s.displayName)
                         Spacer()
@@ -93,10 +99,13 @@ struct TranscriptView: View {
                         renamingSpeakerId = s.speakerId
                         renameText = s.speakerName ?? ""
                     }
+                    .readingRow()
                 }
+            } header: {
+                Text("Talk time").readingRow()
             }
-            Section("Transcript") {
-                ForEach(transcript.turns) { turn in
+            Section {
+                ForEach(transcript.turns, id: \.listID) { turn in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(turn.displayName).font(.caption.weight(.semibold))
@@ -105,11 +114,18 @@ struct TranscriptView: View {
                                 .foregroundStyle(.tertiary)
                         }
                         Text(turn.text)
+                            .macTextSelection()
                     }
                     .padding(.vertical, 2)
+                    .readingRow()
                 }
+            } header: {
+                Text("Transcript").readingRow()
             }
         }
+        #if os(macOS)
+        .readingWidth()
+        #endif
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -119,13 +135,13 @@ struct TranscriptView: View {
                         }
                     }
                     Button {
-                        copyToPasteboard(TranscriptExport.markdown(transcript))
+                        Pasteboard.copy(TranscriptExport.markdown(transcript))
                     } label: {
                         Label("Copy Markdown", systemImage: "doc.on.doc")
                     }
                     Button {
                         if let data = try? TranscriptExport.json(transcript) {
-                            copyToPasteboard(String(decoding: data, as: UTF8.self))
+                            Pasteboard.copy(String(decoding: data, as: UTF8.self))
                         }
                     } label: {
                         Label("Copy JSON", systemImage: "curlybraces")
@@ -177,45 +193,79 @@ struct TranscriptView: View {
     @ViewBuilder
     private var summarySection: some View {
         if store.aiSummariesEnabled || session.summary != nil {
-            Section("Summary") {
-                if let summary = session.summary {
-                    SummaryOverviewText(overview: summary.overview)
-                        .padding(.vertical, 2)
-                    if let summaryURL {
-                        ShareLink(item: summaryURL) {
-                            Label("Share Summary", systemImage: "square.and.arrow.up")
-                        }
+            Section {
+                summaryRows
+                    .readingRow()
+            } header: {
+                Text("Summary").readingRow()
+            }
+        }
+    }
+
+    #if os(macOS)
+    /// Shown only when this session's file in ~/Luxicon failed to write.
+    @ViewBuilder
+    private var libraryWriteSection: some View {
+        if let problem = store.libraryWriteErrors[session.id] {
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(LibraryWriteWarning.title, systemImage: "exclamationmark.triangle.fill")
+                        .font(.headline)
+                        .foregroundStyle(.orange)
+                    Text("Claude can't see this session until it is saved there. \(problem)")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                    Button("Try Again") { store.writeLibraryFile(for: session) }
+                }
+                .padding(.vertical, 4)
+                .readingRow()
+            }
+        }
+    }
+    #endif
+
+    /// The Summary section's rows (a Group: `readingRow()` applies to each).
+    private var summaryRows: some View {
+        Group {
+            if let summary = session.summary {
+                SummaryOverviewText(overview: summary.overview)
+                    .padding(.vertical, 2)
+                    .macTextSelection()
+                if let summaryURL {
+                    ShareLink(item: summaryURL) {
+                        Label("Share Summary", systemImage: "square.and.arrow.up")
                     }
-                    if store.aiSummariesEnabled {
-                        Button {
-                            var s = session
-                            s.summary = nil
-                            s.listLabel = nil
-                            store.update(s)
-                            store.startSummarizing(s)
-                        } label: {
-                            Label("Regenerate Summary", systemImage: "arrow.clockwise")
-                        }
-                    }
-                } else if let stage = store.processing.summarizing[session.id] {
-                    HStack {
-                        ProgressView()
-                        Text(stage).font(.footnote).foregroundStyle(.secondary).padding(.leading, 8)
-                    }
-                } else {
-                    if let error = store.processing.summarizeError[session.id] {
-                        Label {
-                            Text(error).font(.footnote).foregroundStyle(.red)
-                        } icon: {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                        }
-                    }
+                }
+                if store.aiSummariesEnabled {
                     Button {
-                        store.startSummarizing(session)
+                        var s = session
+                        s.summary = nil
+                        s.listLabel = nil
+                        store.update(s)
+                        store.startSummarizing(s)
                     } label: {
-                        Label("Generate Summary", systemImage: "sparkles")
+                        Label("Regenerate Summary", systemImage: "arrow.clockwise")
                     }
+                }
+            } else if let stage = store.processing.summarizing[session.id] {
+                HStack {
+                    ProgressView()
+                    Text(stage).font(.footnote).foregroundStyle(.secondary).padding(.leading, 8)
+                }
+            } else {
+                if let error = store.processing.summarizeError[session.id] {
+                    Label {
+                        Text(error).font(.footnote).foregroundStyle(.red)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                }
+                Button {
+                    store.startSummarizing(session)
+                } label: {
+                    Label("Generate Summary", systemImage: "sparkles")
                 }
             }
         }
@@ -277,17 +327,6 @@ struct TranscriptView: View {
         .disabled(isPushing)
     }
 
-    /// Local-only + expiring: transcripts shouldn't hop devices via Universal
-    /// Clipboard or linger in the pasteboard indefinitely.
-    private func copyToPasteboard(_ text: String) {
-        UIPasteboard.general.setItems(
-            [[UTType.utf8PlainText.identifier: text]],
-            options: [
-                .localOnly: true,
-                .expirationDate: Date().addingTimeInterval(10 * 60),
-            ])
-    }
-
     /// ShareLink needs a file URL; write the markdown next to the temp dir.
     private func writeExportFile() {
         let safeTitle = transcript.title.replacingOccurrences(of: "/", with: "-")
@@ -311,7 +350,7 @@ struct TranscriptView: View {
 /// markdown is inline-only — newlines collapse to spaces and "- " markers
 /// render as literal text — so lay out paragraphs and bullet rows ourselves
 /// and keep inline markdown (bold) within each block.
-private struct SummaryOverviewText: View {
+struct SummaryOverviewText: View {
     let overview: String
 
     var body: some View {
@@ -332,4 +371,16 @@ private struct SummaryOverviewText: View {
         }
         .font(.callout)
     }
+}
+
+/// Row identities for one `List` holding both talk-time and transcript rows.
+/// Speaker ids and turn ids are both small Ints, so used bare they collide
+/// across sections, and the macOS List then draws talk-time rows in place
+/// of the first transcript turns.
+extension SpeakerStats {
+    var listID: String { "speaker-\(speakerId)" }
+}
+
+extension TranscriptTurn {
+    var listID: String { "turn-\(id)" }
 }

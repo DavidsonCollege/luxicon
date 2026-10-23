@@ -4,6 +4,9 @@ import LuxiconKit
 #if canImport(UIKit)
 import UIKit
 #endif
+#if os(macOS)
+import AppKit
+#endif
 
 enum RecorderError: LocalizedError {
     case microphoneAccessDenied
@@ -12,7 +15,11 @@ enum RecorderError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .microphoneAccessDenied:
+            #if os(macOS)
+            return "Microphone access is off for Luxicon. Turn it on in System Settings → Privacy & Security → Microphone."
+            #else
             return "Microphone access is off for Luxicon. Turn it on in Settings → Privacy & Security → Microphone."
+            #endif
         case .microphoneUnavailable:
             return "The microphone is unavailable right now."
         }
@@ -36,7 +43,13 @@ enum RecorderError: LocalizedError {
 /// hatch. Write failures (disk full) surface via `runtimeError` instead of
 /// being silently swallowed.
 final class Recorder: @unchecked Sendable {
+    #if os(macOS)
+    /// Replaced on a device switch (`setInputDevice`) so the input node's
+    /// format is read fresh for the new device.
+    private var engine = AVAudioEngine()
+    #else
     private let engine = AVAudioEngine()
+    #endif
     private let lock = NSLock()
     private var buffer: [Float] = []
     private var sampleTally = 0
@@ -45,6 +58,28 @@ final class Recorder: @unchecked Sendable {
     private var fileURL: URL?
     private var runtimeErrorStorage: String?
     private var observers: [NSObjectProtocol] = []
+    #if os(macOS)
+    /// Registered on `NSWorkspace.shared.notificationCenter`, not the default
+    /// center, so they're tracked (and removed) separately.
+    private var workspaceObservers: [NSObjectProtocol] = []
+
+    /// Called on the main thread when the Mac is about to sleep while a
+    /// recording is in progress (including off the record). Sleep stops the
+    /// audio hardware, so the record window stops and saves here rather than
+    /// leaving a recording that silently stopped capturing. Set before `start`.
+    var onSystemSleep: (@MainActor () -> Void)?
+    #endif
+    #if DEBUG
+    /// DEBUG-only: when set before `start`, these 16 kHz samples are fed
+    /// (looped, in real time) through the normal write path instead of the
+    /// microphone, so the record flow can be exercised without mic access.
+    var simulatedInput: [Float]?
+    private var simulatedTimer: DispatchSourceTimer?
+    #if os(macOS)
+    /// The device a simulated recording "captures from" (nil: the default).
+    private var simulatedInputDeviceID: AudioDeviceID?
+    #endif
+    #endif
     private(set) var isRecording = false
     /// True while another audio session (phone call, Siri) holds the mic.
     private(set) var isInterrupted = false
@@ -53,6 +88,13 @@ final class Recorder: @unchecked Sendable {
     /// it. Confined to the main thread (set by `pause`/`resume`, read by the UI),
     /// like `isInterrupted`.
     private(set) var isPaused = false
+    #if os(macOS)
+    /// Muted: capture keeps running (the system routes mute/unmute gestures
+    /// to the app doing input I/O) but every chunk is dropped — no tally,
+    /// no write, no `onSamples`, level 0. Lock-protected: set from the
+    /// system mute handler's thread. Distinct from `isPaused`.
+    private var discardingInputStorage = false
+    #endif
 
     /// Backoff schedule for re-trying capture after a failed interruption
     /// recovery (the interrupting app can take a beat to release the mic).
@@ -104,6 +146,15 @@ final class Recorder: @unchecked Sendable {
         try session.setActive(true)
         #endif
 
+        try prepareWriter(for: fileURL)
+        try startEngine()
+        isRecording = true
+        isInterrupted = false
+        installObservers()
+    }
+
+    /// Fresh tally, buffer, and (for a file-backed recording) writer.
+    private func prepareWriter(for fileURL: URL?) throws {
         // Create the writer before taking the lock: a throw while the lock is
         // held would deadlock every UI poll of `duration`.
         let newWriter = try fileURL.map { try WAVFileWriter(url: $0, sampleRate: Self.sampleRate) }
@@ -114,12 +165,83 @@ final class Recorder: @unchecked Sendable {
         self.fileURL = fileURL
         runtimeErrorStorage = nil
         lock.unlock()
-
-        try startEngine()
-        isRecording = true
-        isInterrupted = false
-        installObservers()
     }
+
+    #if os(macOS)
+    /// Drop (or stop dropping) captured audio while the mic is muted.
+    /// Safe from any thread; once it returns `true`, no further chunk is
+    /// written or tallied.
+    func setDiscardingInput(_ discarding: Bool) {
+        lock.lock()
+        discardingInputStorage = discarding
+        lock.unlock()
+        if discarding { level = 0 }
+    }
+
+    var isDiscardingInput: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return discardingInputStorage
+    }
+
+    /// Capture from `id` instead of the current input device. Mid-recording
+    /// the switch is seamless — the tap is rewired with the new device's
+    /// format, and the same file, tally, and session carry on. Off the
+    /// record (or before `start`) it takes effect when capture next starts.
+    /// Throws only if Core Audio refuses the device; a failed restart is
+    /// reported via `runtimeError` and retried like any lost capture.
+    func setInputDevice(_ id: AudioDeviceID) throws {
+        // Capture should be flowing (not stopped, not off the record); it may
+        // already have died with the old device, which the restart recovers.
+        let shouldCapture = isRecording && !isPaused
+        if shouldCapture && isCapturing { stopEngine() }
+        #if DEBUG
+        if simulatedInput != nil {
+            simulatedInputDeviceID = id
+            if shouldCapture { resumeCapture() }
+            return
+        }
+        #endif
+        // A fresh engine: a stopped engine's input node can keep reporting
+        // the old device's format, and a tap installed with a format that
+        // doesn't match the hardware raises an uncatchable exception.
+        // Observers are tied to the engine instance, so re-register them.
+        engine.stop()
+        engine = AVAudioEngine()
+        if isRecording {
+            removeObservers()
+            installObservers()
+        }
+        guard let unit = engine.inputNode.audioUnit else {
+            if shouldCapture { resumeCapture() }
+            throw RecorderError.microphoneUnavailable
+        }
+        var device = id
+        let status = AudioUnitSetProperty(
+            unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+            &device, UInt32(MemoryLayout<AudioDeviceID>.size))
+        // Restart either way: on failure, the previous device carries on.
+        // (No-op while capture is already running.)
+        if shouldCapture { resumeCapture() }
+        guard status == noErr else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+        }
+    }
+
+    /// The device capture is actually bound to (the input unit's current
+    /// device), which needn't be the system default. Nil before `start`.
+    var currentInputDeviceID: AudioDeviceID? {
+        #if DEBUG
+        if simulatedInput != nil { return simulatedInputDeviceID }
+        #endif
+        guard isRecording, let unit = engine.inputNode.audioUnit else { return nil }
+        var device = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioUnitGetProperty(
+            unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &device, &size) == noErr,
+              device != 0 else { return nil }
+        return device
+    }
+    #endif
 
     /// Stop, finalize the on-disk file (if any), and return the in-memory
     /// samples (enrollment recordings only; file-backed recordings return []).
@@ -127,11 +249,13 @@ final class Recorder: @unchecked Sendable {
         guard isRecording else { return [] }
         removeObservers()
         resumeRetryGeneration += 1
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        stopEngine()
         isRecording = false
         isInterrupted = false
         isPaused = false
+        #if os(macOS)
+        setDiscardingInput(false)
+        #endif
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif
@@ -158,8 +282,7 @@ final class Recorder: @unchecked Sendable {
         guard isRecording, !isPaused else { return }
         isPaused = true
         resumeRetryGeneration += 1
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        stopEngine()
         level = 0
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -198,6 +321,12 @@ final class Recorder: @unchecked Sendable {
     /// (Re)wire the tap and start the engine. Reads the CURRENT input format,
     /// so it is also the recovery path after route/configuration changes.
     private func startEngine() throws {
+        #if DEBUG
+        if let simulatedInput {
+            startSimulatedCapture(simulatedInput)
+            return
+        }
+        #endif
         let input = engine.inputNode
         input.removeTap(onBus: 0)
         let inputFormat = input.outputFormat(forBus: 0)
@@ -206,6 +335,15 @@ final class Recorder: @unchecked Sendable {
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
             throw RecorderError.microphoneUnavailable
         }
+        #if os(macOS)
+        // Mid device change, the node's format can lag the hardware's; a
+        // mismatched tap is an uncatchable NSException. Wait for the
+        // configuration change (or a retry) to rewire with the real format.
+        if let hardwareRate = Self.hardwareInputSampleRate(input),
+           abs(hardwareRate - inputFormat.sampleRate) > 0.5 {
+            throw InputFormatSettling(nodeRate: inputFormat.sampleRate, hardwareRate: hardwareRate)
+        }
+        #endif
         converter = AVAudioConverter(from: inputFormat, to: Self.targetFormat)
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] pcmBuffer, _ in
             self?.consume(pcmBuffer)
@@ -214,10 +352,55 @@ final class Recorder: @unchecked Sendable {
         try engine.start()
     }
 
+    /// Remove the tap and stop the engine (stop, off the record).
+    private func stopEngine() {
+        #if DEBUG
+        if simulatedInput != nil {
+            simulatedTimer?.cancel()
+            simulatedTimer = nil
+            return
+        }
+        #endif
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+    }
+
+    /// Whether audio is currently flowing into `consume`.
+    private var isCapturing: Bool {
+        #if DEBUG
+        if simulatedInput != nil { return simulatedTimer != nil }
+        #endif
+        return engine.isRunning
+    }
+
+    #if DEBUG
+    /// Feed `samples` in 100 ms chunks on a timer, like the engine's tap.
+    private func startSimulatedCapture(_ samples: [Float]) {
+        guard !samples.isEmpty else { return }
+        simulatedTimer?.cancel()
+        let chunkSize = Self.sampleRate / 10
+        var offset = 0
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "Recorder.simulatedInput"))
+        timer.schedule(deadline: .now() + 0.1, repeating: 0.1)
+        timer.setEventHandler { [weak self] in
+            var chunk: [Float] = []
+            chunk.reserveCapacity(chunkSize)
+            while chunk.count < chunkSize {
+                let take = min(chunkSize - chunk.count, samples.count - offset)
+                chunk.append(contentsOf: samples[offset..<(offset + take)])
+                offset = (offset + take) % samples.count
+            }
+            self?.ingest(chunk)
+        }
+        simulatedTimer = timer
+        timer.resume()
+    }
+    #endif
+
     private func resumeCapture() {
         // `!isPaused`: a phone call ending or a route change during an off-record
         // span must NOT silently restart capture — only the user's resume() does.
-        guard isRecording, !isPaused, !engine.isRunning else { return }
+        guard isRecording, !isPaused, !isCapturing else { return }
         do {
             #if os(iOS)
             try AVAudioSession.sharedInstance().setActive(true)
@@ -228,7 +411,16 @@ final class Recorder: @unchecked Sendable {
             resumeRetryGeneration += 1  // cancel any in-flight retry timers
             clearRuntimeError()
         } catch {
-            setRuntimeError("Recording paused and could not resume: \(error.localizedDescription). Tap Resume to retry, or stop to save what was captured.")
+            #if os(macOS)
+            // A format still settling after a device change isn't worth
+            // alarming anyone over unless it never settles.
+            let settling = error is InputFormatSettling && resumeRetryAttempt < Self.resumeRetryDelays.count
+            #else
+            let settling = false
+            #endif
+            if !settling {
+                setRuntimeError("Recording paused and could not resume: \(error.localizedDescription). Tap Resume to retry, or stop to save what was captured.")
+            }
             scheduleResumeRetry()
         }
     }
@@ -293,6 +485,15 @@ final class Recorder: @unchecked Sendable {
             self?.resumeCapture()
         })
         observers = installed
+        #if os(macOS)
+        // Sleep stops the audio hardware; let the owner stop and save first.
+        workspaceObservers = [NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.onSystemSleep?() }
+        }]
+        #endif
     }
 
     private func removeObservers() {
@@ -300,7 +501,34 @@ final class Recorder: @unchecked Sendable {
             NotificationCenter.default.removeObserver(observer)
         }
         observers = []
+        #if os(macOS)
+        for observer in workspaceObservers {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+        workspaceObservers = []
+        #endif
     }
+
+    #if os(macOS)
+    /// The device-side sample rate of the input unit (input scope of the
+    /// input element) — what AVAudioEngine checks a tap's format against.
+    private static func hardwareInputSampleRate(_ input: AVAudioInputNode) -> Double? {
+        guard let unit = input.audioUnit else { return nil }
+        var format = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        guard AudioUnitGetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1,
+                                   &format, &size) == noErr, format.mSampleRate > 0 else { return nil }
+        return format.mSampleRate
+    }
+
+    private struct InputFormatSettling: LocalizedError {
+        let nodeRate: Double
+        let hardwareRate: Double
+        var errorDescription: String? {
+            "The microphone's format is changing (\(Int(nodeRate)) Hz → \(Int(hardwareRate)) Hz)."
+        }
+    }
+    #endif
 
     #if os(iOS)
     private func handleInterruption(_ note: Notification) {
@@ -350,13 +578,23 @@ final class Recorder: @unchecked Sendable {
         }
         guard error == nil, out.frameLength > 0, let channel = out.floatChannelData?[0] else { return }
 
-        let samples = UnsafeBufferPointer(start: channel, count: Int(out.frameLength))
-        var sumSquares: Float = 0
-        for s in samples { sumSquares += s * s }
-        level = min(1, sqrt(sumSquares / Float(samples.count)) * 6)
+        ingest(Array(UnsafeBufferPointer(start: channel, count: Int(out.frameLength))))
+    }
 
-        let chunk = Array(samples)
+    /// Meter, tally, persist, and forward one converted 16 kHz chunk.
+    private func ingest(_ chunk: [Float]) {
+        var sumSquares: Float = 0
+        for s in chunk { sumSquares += s * s }
+        level = min(1, sqrt(sumSquares / Float(chunk.count)) * 6)
+
         lock.lock()
+        #if os(macOS)
+        if discardingInputStorage {
+            lock.unlock()
+            level = 0
+            return
+        }
+        #endif
         sampleTally += chunk.count
         if writer == nil {
             // Enrollment path: caller consumes the samples from stop().

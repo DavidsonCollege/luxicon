@@ -17,7 +17,7 @@ Technology & Innovation team. If you like what you see, consider
 ## How it works
 
 1. **Enroll your voice once** (~15 seconds of reading aloud). Luxicon stores a
-   256-number voice fingerprint — not the audio.
+   compact voice fingerprint — not the audio.
 2. **Record a 1-on-1** with the phone on the table. When you stop, the app
    diarizes the conversation (who spoke when), transcribes each speaker turn,
    and matches your enrolled voice — so the transcript comes out labeled
@@ -49,6 +49,33 @@ two-speaker meeting diarizes, transcribes, and speaker-matches in 4.6 s
 (0.09× real-time), with every turn correctly attributed. iPhones with recent
 A-series chips should land within a few multiples of that. Reproduce with
 `luxicon-cli <any two-speaker wav>` — it prints the real-time factor.
+
+## Luxicon for Mac
+
+A native Mac app (Apple silicon only, macOS 15 or later) that records and
+transcribes on the Mac itself, entirely on-device, and keeps its sessions in
+the same `~/Luxicon` library the phone pushes into and the MCP server reads.
+
+- **Download:** the signed, notarized `Luxicon-<version>-<build>.dmg` from the
+  [GitHub Releases](https://github.com/DavidsonCollege/luxicon/releases) page
+  (look for tags starting `mac-v`). Open the DMG and drag Luxicon to
+  Applications.
+- **Shared library:** sessions from the Mac app and from phone pushes all live
+  in `~/Luxicon`. (`luxicon-cli` doesn't write there itself: it writes to its
+  `--out` folder, or `luxicon-cli push` sends a file through the listener like
+  the phone does.)
+- **Voice print:** import the voice print you enrolled on your iPhone (My Voice
+  → Mac sync → Send My Voice to Mac) so the Mac labels you automatically.
+- **Microphone:** pick the input in the recording window; Luxicon remembers it
+  and switches mid-recording without stopping.
+- **Mute = off the record:** muting your mic (AirPods stem press, a USB mic's
+  mute button) pauses the recording and nothing is recorded; unmuting resumes it.
+- **Privacy:** same posture as the phone app. Audio and transcripts stay on
+  the Mac; the only network traffic is the model downloads and the opt-in
+  features described below.
+
+Build it yourself with `scripts/build-mac-app.sh` (see
+[docs/releasing.md](docs/releasing.md)).
 
 ## Structure
 
@@ -167,7 +194,9 @@ asks first.
   - **Mac sync** — when you pair a Mac, transcripts and summaries you push
     (or all new ones, if you enable auto-push) travel over your local network
     to that Mac, encrypted with a key derived from the pairing token. Nothing
-    goes to the internet. See [docs/sync.md](docs/sync.md).
+    goes to the internet. **Send My Voice to Mac** copies a small file with
+    your voice fingerprint (not audio), your display name, and the date it was
+    created, and only when you tap it. See [docs/sync.md](docs/sync.md).
   - **Vocabulary / people URL sync** — when you point the app at a vocabulary
     or people-roster file URL, it fetches them (https only, no cross-host
     redirects) when opened.

@@ -48,7 +48,7 @@ extension Store {
         do {
             let payload = try TranscriptExport.json(transcript, summary: session.summary)
             let person = person(id: session.personId)?.name ?? "session"
-            let filename = "\(person) \(session.date.formatted(.iso8601.year().month().day())) \(session.id.uuidString.prefix(8)).json"
+            let filename = LuxiconSync.sessionFilename(person: person, date: session.date, id: session.id)
             let host = syncHost.trimmingCharacters(in: .whitespaces)
             try await LuxiconSync.push(
                 filename: filename,
@@ -62,6 +62,28 @@ extension Store {
         }
         recordPushOutcome(outcome, for: session.id)
         return outcome
+    }
+
+    /// Push the user's own voice print (for Luxicon for Mac). Not tied to any
+    /// session, so nothing is recorded in the store; the caller shows the result.
+    func sendVoicePrintToMac() async -> PushOutcome {
+        let token = syncToken.trimmingCharacters(in: .whitespaces)
+        guard !token.isEmpty, let embedding = myVoiceEmbedding else {
+            return .notConfigured
+        }
+        do {
+            let payload = try VoicePrintFile(name: myName, embedding: embedding).encoded()
+            let host = syncHost.trimmingCharacters(in: .whitespaces)
+            try await LuxiconSync.push(
+                filename: VoicePrintFile.filename,
+                payload: payload,
+                token: token,
+                host: host.isEmpty ? nil : host
+            )
+            return .success
+        } catch {
+            return .failure((error as? LocalizedError)?.errorDescription ?? "\(error)")
+        }
     }
 
     /// Write the outcome onto the stored session (looked up by id — the

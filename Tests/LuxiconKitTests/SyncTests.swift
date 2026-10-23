@@ -66,3 +66,31 @@ import Testing
         #expect(token.allSatisfy { alphabet.contains($0) })
     }
 }
+
+@Suite struct SessionFilenameDeterminismTests {
+    @Test func hiddenOrEmptyPersonNamesAreDeterministic() {
+        let id = UUID(uuidString: "ABCDEF12-0000-0000-0000-000000000000")!
+        let date = Date(timeIntervalSince1970: 1_780_000_000)
+        for person in [".hidden", "", "   ", " .x", "..", "/.x"] {
+            let first = LuxiconSync.sessionFilename(person: person, date: date, id: id)
+            let second = LuxiconSync.sessionFilename(person: person, date: date, id: id)
+            #expect(first == second, "\(person.debugDescription) must name the session the same way every time")
+            #expect(!first.hasPrefix("."))
+            #expect(!first.contains("/"))
+        }
+        #expect(LuxiconSync.sessionFilename(person: ".hidden", date: date, id: id)
+                == "session 2026-05-28 ABCDEF12.json")
+        // Ordinary names are unchanged.
+        #expect(LuxiconSync.sessionFilename(person: "A/B", date: date, id: id)
+                == "A-B 2026-05-28 ABCDEF12.json")
+    }
+
+    @Test func listenerStillRandomizesHiddenIncomingNames() {
+        // The listener's defensive path is unchanged: arbitrary incoming
+        // names that would be hidden files never land as given.
+        let a = LuxiconSync.sanitizedFilename(".sync-token")
+        let b = LuxiconSync.sanitizedFilename(".sync-token")
+        #expect(a.hasPrefix("session-") && b.hasPrefix("session-"))
+        #expect(a != b)
+    }
+}

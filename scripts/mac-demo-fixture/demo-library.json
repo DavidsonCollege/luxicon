@@ -1,0 +1,179 @@
+{
+  "_comment": "Fictional demo library for marketing screenshots. Every person, conversation, and summary here is invented. Turn timestamps are derived from word counts by generate.py.",
+  "timeZone": "America/New_York",
+  "myName": "Alex Morgan",
+  "myContext": "Director of IT infrastructure and identity at a small college.",
+  "vocabulary": [
+    { "term": "SSO", "category": "acronym", "notes": "Single sign-on" },
+    { "term": "MFA", "category": "acronym", "notes": "Multi-factor authentication" },
+    { "term": "SAML", "category": "acronym", "soundsLike": ["sam el", "sammal"] },
+    { "term": "eduroam", "category": "other", "soundsLike": ["edu roam", "you do roam"] },
+    { "term": "tier-two", "category": "other" }
+  ],
+  "people": [
+    {
+      "id": "4ED4DB9D-1597-49A6-9DEB-8823C8326125",
+      "name": "Priya Shah",
+      "context": "Identity & access manager. Leading the move to the new identity platform (SSO + MFA): pilot in November, campus-wide cutover in January."
+    },
+    {
+      "id": "8D027380-470B-4C08-8D80-DFDEAB605DCB",
+      "name": "Marcus Bell",
+      "context": "Senior systems administrator. Owns servers and backups; interested in a team lead role."
+    },
+    {
+      "id": "B13BE38D-D16C-40BA-A502-E0E5FBF77575",
+      "name": "Dana Okafor",
+      "context": "Service desk manager. Runs the help desk and the student technician program."
+    },
+    {
+      "id": "D7F26194-2311-40D4-841F-B732C46CBD58",
+      "name": "Sam Rivera",
+      "context": "Network engineer. Leading the residence hall Wi-Fi refresh."
+    },
+    {
+      "id": "C6276794-E78C-4668-9C76-604BCF049AFB",
+      "name": "Lena Fischer",
+      "context": "Classroom technology lead. Teaching spaces, lecture capture, and AV standards."
+    }
+  ],
+  "sessions": [
+    {
+      "id": "216982DA-FBB6-4238-B62C-22F395056E23",
+      "person": "Priya Shah",
+      "source": "mac",
+      "featured": true,
+      "date": "2026-10-22T14:00:00",
+      "listLabel": "SSO pilot, housing exception, help desk",
+      "summary": "**Overview** — Priya and Alex reviewed readiness for the identity platform pilot. Enrollment and single sign-on are on track, the housing portal will stay on the legacy directory until spring, and the January student cutover needs earlier communication and help desk support.\n**Key topics**\n- Pilot readiness: 140 staff enrolled in MFA, SSO working for 38 of 45 apps\n- Library and housing systems still bound to the legacy LDAP directory\n- Student MFA communications and help desk readiness for January\n- Priya's workload and constant account escalations\n**Decisions**\n- Pilot starts November 10 with IT and Finance\n- Housing portal stays on the legacy directory until its vendor ships SAML\n- Account escalations go to the tier-two queue for the next ten weeks\n**Action items**\n- Priya: send the app-by-app SSO status to Alex by Friday\n- Priya: draft the student MFA email before finals and share it with Alex first\n- Alex: ask Dana about two extra help desk shifts for cutover week\n- Alex: let the dean of students' office know about the housing exception\n- Priya: schedule a 30-minute training with the tier-two team",
+      "turns": [
+        ["Alex Morgan", "Thanks for moving this up a day. I know pilot prep has been eating your week, so let's start with where things stand, and then I want to hear how you're doing."],
+        ["Priya Shah", "Sure. Overall I feel a lot better than I did two weeks ago. We have a hundred and forty staff enrolled in the new MFA, and single sign-on is working for thirty-eight of the forty-five apps on our list. The seven that are left are mostly the older systems we expected to be trouble."],
+        ["Alex Morgan", "Which ones worry you the most?"],
+        ["Priya Shah", "The library system and the housing portal. Both still bind directly to the old LDAP directory. The library vendor says they'll support SAML in their December release. Housing is harder. Their roadmap doesn't have it until summer."],
+        ["Alex Morgan", "So what's your recommendation for housing?"],
+        ["Priya Shah", "Leave it on the legacy directory until spring. We keep that one connector alive, lock it down to the housing servers, and retire it once they ship SAML. It isn't elegant, but it doesn't put move-in at risk."],
+        ["Alex Morgan", "I agree. I'd rather carry one exception for a semester than force a migration in January, when housing is at its busiest. Let's write that down as the decision, and I'll let the dean of students' office know so nobody is surprised."],
+        ["Priya Shah", "Thank you. That takes a lot of pressure off."],
+        ["Alex Morgan", "Okay, the pilot itself. Are we still on for November tenth?"],
+        ["Priya Shah", "We are. IT and Finance go first. Finance was the right choice, by the way. They have the most apps per person, so if something breaks, we'll find it quickly. I have office hours scheduled for the first two days, and Marcus is going to watch the identity server logs with me."],
+        ["Alex Morgan", "Good. What does the help desk need from us?"],
+        ["Priya Shah", "That's the part I'm less sure about. The pilot is small, but in January every student hits the enrollment screen in the same week. Dana's team will get the calls, and right now the knowledge base articles are written for staff, not for students."],
+        ["Alex Morgan", "Let's get ahead of that. I'll talk to Dana about adding two extra shifts for cutover week. Could you work with Communications on the student email? Short and friendly, and it should go out before finals so nobody sees it for the first time in January."],
+        ["Priya Shah", "Yes. I'll draft it this week and send it to you before it goes to Communications."],
+        ["Alex Morgan", "Perfect. Anything else on the project before we switch gears?"],
+        ["Priya Shah", "Just that I'll send you the app-by-app status on Friday, so you have something for the cabinet update."],
+        ["Alex Morgan", "That would help a lot. So, how are you doing? This has been a heavy few months."],
+        ["Priya Shah", "Honestly, it's been a lot. The project part is fine. It's the context switching. I'm still the escalation point for every account issue, and that pulls me out of the migration work two or three times a day."],
+        ["Alex Morgan", "That's fair, and it's something we can fix. What if account escalations go to the help desk's tier-two queue for the next ten weeks, and you only get the ones they can't resolve?"],
+        ["Priya Shah", "That would make a real difference. I'd want to do a short training session with them first, so they're comfortable with the new admin console."],
+        ["Alex Morgan", "Let's plan on it. Put thirty minutes on the calendar with the tier-two folks, and I'll make sure they know it's coming from me too."],
+        ["Priya Shah", "Will do. Thanks, Alex."],
+        ["Alex Morgan", "Thank you. You've kept this project calm, and people notice. Same time next week?"],
+        ["Priya Shah", "Same time next week."]
+      ]
+    },
+    {
+      "id": "E0CB9708-35C0-48C1-B1F7-0E79F4F0153B",
+      "person": "Priya Shah",
+      "source": "iphone",
+      "date": "2026-10-08T10:30:00",
+      "summary": "**Overview** — Quarterly review: the password self-service portal and the stale-account cleanup shipped in Q3; the privileged access review moves to December, behind the identity pilot.\n**Key topics**\n- Q3 wins: self-service portal, removal of about 900 stale accounts\n- Privileged access review slipped behind the identity platform\n- Q4 priorities: the pilot, then automated account creation from HR\n**Decisions**\n- Privileged access review resumes in December, after the pilot\n- Automated onboarding from HR is a Q4 stretch goal\n**Action items**\n- Priya: put the privileged access review back on the December plan\n- Alex: raise the onboarding workflow with HR's systems lead",
+      "turns": [
+        ["Alex Morgan", "Let's do the quarter review. What landed, what slipped, and what you want to carry into Q4."],
+        ["Priya Shah", "What landed: the password self-service portal went live in August, and we finished the account cleanup. We removed about nine hundred stale accounts from people who left before 2023."],
+        ["Alex Morgan", "That cleanup was overdue. Nice work. What slipped?"],
+        ["Priya Shah", "The privileged access review. I started it, but it got pushed behind the identity platform. I'd like to finish it in Q4, but realistically not until after the pilot."],
+        ["Alex Morgan", "That's the right order. Let's move it to December and make it the first thing you pick up once the pilot settles."],
+        ["Priya Shah", "And for Q4, the big one is obviously the pilot. I'd also like to get the new onboarding workflow into HR's hands, so accounts are created from the hire record instead of from a ticket."],
+        ["Alex Morgan", "Let's keep that as a stretch goal. If the pilot goes smoothly, you'll have room for it in December. I'll mention it to HR's systems lead so it's on their radar."],
+        ["Priya Shah", "That works. Thanks."]
+      ]
+    },
+    {
+      "id": "893DEAC7-B0B6-4F42-8385-99EEDC28AE95",
+      "person": "Priya Shah",
+      "source": "iphone",
+      "date": "2026-09-24T10:30:00",
+      "summary": "**Overview** — Priya shared takeaways from a regional identity conference and agreed on a training plan for the identity architect course.\n**Key topics**\n- Lessons from peer colleges' MFA rollouts: communicate early, script the help desk\n- Spacing between the pilot and the next rollout group\n- Identity architect certification\n**Decisions**\n- Leave a full week between the pilot and the next group\n- Priya joins the January cohort of the identity architect course\n**Action items**\n- Priya: register for the January cohort",
+      "turns": [
+        ["Alex Morgan", "How was the conference?"],
+        ["Priya Shah", "Really useful. The best session was a panel of three small colleges that had just finished MFA rollouts. All three said the same thing: communicate early, and give the help desk a script."],
+        ["Alex Morgan", "That lines up with what we're planning. Anything you'd change in our timeline because of it?"],
+        ["Priya Shah", "Maybe one thing. I think we're fine piloting with IT and Finance together, but we should leave a full week between the pilot and the next group, so we have time to fix what we learn."],
+        ["Alex Morgan", "Good call. And training. You mentioned a certification?"],
+        ["Priya Shah", "Yes, the identity architect course. It's online, about six weeks, and it fits in the training budget."],
+        ["Alex Morgan", "Let's do it. Sign up for the January cohort so it doesn't collide with the pilot."]
+      ]
+    },
+    {
+      "id": "F8DEBB04-9237-4983-96D4-A46A6DCD7035",
+      "person": "Marcus Bell",
+      "source": "mac",
+      "date": "2026-10-20T15:30:00",
+      "listLabel": "Team lead path, virtualization refresh",
+      "summary": "**Overview** — A career growth conversation about Marcus moving toward a team lead role that keeps a strong technical component.\n**Key topics**\n- Mentoring newer admins as the highlight of Marcus's year\n- Shape of the lead role: infrastructure roadmap, weekly ops review, backup architecture\n- Building budget and capital-request skills\n**Decisions**\n- Marcus leads the virtualization refresh end to end\n- Marcus starts running the weekly ops review in January\n**Action items**\n- Alex: review last year's capital request with Marcus\n- Alex: introduce Marcus to Finance's budget analyst\n- Both: add the growth goals to Marcus's review and check in monthly",
+      "turns": [
+        ["Alex Morgan", "I wanted to use today for the conversation we started last month, about where you want to be in two or three years."],
+        ["Marcus Bell", "Yeah, I've been thinking about it a lot. I like the technical work, but the part I've enjoyed most this year has been helping the newer admins. Walking them through the backup restore drill was honestly the highlight of my summer."],
+        ["Alex Morgan", "That came through. Two people mentioned it to me without being asked. So is a team lead role what you're aiming for?"],
+        ["Marcus Bell", "I think so. But I'm nervous about losing the hands-on work completely."],
+        ["Alex Morgan", "You wouldn't have to. The lead role we're shaping is about half technical. You'd own the infrastructure roadmap and run the weekly ops review, and you'd still be the person who designs the backup architecture."],
+        ["Marcus Bell", "That sounds like the right mix. What would I need to show between now and then?"],
+        ["Alex Morgan", "Two things. Lead one project end to end, including the stakeholder updates, and start running the ops review in January. The virtualization refresh is a good fit for the first."],
+        ["Marcus Bell", "I'd like that. I'll need help with the budget side, though. I've never put together a capital request."],
+        ["Alex Morgan", "That's very learnable. Let's sit down with last year's request together, and I'll introduce you to Finance's budget analyst."],
+        ["Marcus Bell", "Thanks. That makes this feel a lot more concrete."],
+        ["Alex Morgan", "It should be concrete. Let's write these goals into your review and check in on them every month."]
+      ]
+    },
+    {
+      "id": "2501A7C4-BE08-487B-8EF1-61A4D24583C2",
+      "person": "Dana Okafor",
+      "source": "iphone",
+      "date": "2026-10-16T09:00:00",
+      "summary": "**Overview** — Dana and Alex planned help desk coverage for fall break and the January MFA cutover, and discussed hiring student technicians for spring.\n**Key topics**\n- Fall break coverage with a reduced student staff\n- Call volume expected during the MFA cutover\n- Spring student technician hiring\n**Decisions**\n- Post three student technician openings in November\n**Action items**\n- Dana: publish the fall break schedule by Monday\n- Dana: draft student-facing MFA articles with Priya",
+      "turns": [
+        ["Alex Morgan", "Morning. How's the desk holding up this week?"],
+        ["Dana Okafor", "Busy, but good. Midterms always bring a wave of printing and Wi-Fi tickets. The bigger question is fall break. Half of my student techs are going home, so I'm building a schedule with the full-time staff covering afternoons."],
+        ["Alex Morgan", "Do you need anything from me for that?"],
+        ["Dana Okafor", "Not for fall break. I'm more worried about January. If every student enrolls in MFA the same week, our call volume could triple."],
+        ["Alex Morgan", "Priya raised the same thing. Would it help to have student-facing articles ready before then?"],
+        ["Dana Okafor", "A lot. I'll work with her on a short set, with screenshots. And I'd like to hire three more student techs for spring."],
+        ["Alex Morgan", "Let's post those openings in November so they're trained before the cutover."]
+      ]
+    },
+    {
+      "id": "59249E21-7B28-4A3D-8238-379F9EBDEACD",
+      "person": "Sam Rivera",
+      "source": "mac",
+      "date": "2026-10-15T11:00:00",
+      "listLabel": "Wi-Fi survey results, access point order",
+      "summary": "**Overview** — Sam walked through the residence hall Wi-Fi survey: two halls have coverage gaps, and the access point order needs to go in before the holiday lead times.\n**Key topics**\n- Survey results across eight residence halls\n- Dead zones on the top floors of two older halls\n- Vendor lead times for access points\n**Decisions**\n- Prioritize the two older halls in the winter break install\n**Action items**\n- Sam: submit the access point order this month\n- Alex: confirm winter break access with Residence Life",
+      "turns": [
+        ["Alex Morgan", "How did the Wi-Fi survey come out?"],
+        ["Sam Rivera", "Mostly good news. Six of the eight halls look healthy. The two older halls have real dead zones on the top floors. The walls are thicker than the drawings suggested."],
+        ["Alex Morgan", "Is that a few more access points, or a redesign?"],
+        ["Sam Rivera", "A few more access points. About eighteen between the two buildings. The catch is lead time. If we don't order this month, we miss the winter break install window."],
+        ["Alex Morgan", "Then let's order this month and make those two halls the priority for winter break. I'll confirm the access dates with Residence Life."],
+        ["Sam Rivera", "Great. I'll send the order over by the end of the week."]
+      ]
+    },
+    {
+      "id": "C45D5010-CACF-4736-A07E-E45A4204F3C3",
+      "person": "Lena Fischer",
+      "source": "iphone",
+      "date": "2026-10-13T13:30:00",
+      "summary": "**Overview** — Lena proposed a simpler AV standard for spring classroom renovations and an expanded lecture capture pilot.\n**Key topics**\n- One standard control panel for renovated classrooms\n- Faculty feedback on lecture capture\n- Spring renovation schedule\n**Decisions**\n- Adopt the single-panel standard for the four spring renovations\n**Action items**\n- Lena: share the standard with Facilities by November 1",
+      "turns": [
+        ["Alex Morgan", "You said you had a proposal for the spring renovations?"],
+        ["Lena Fischer", "I do. Right now we have five different control panels across campus, and faculty never know what they're walking into. I'd like every renovated room to use the same panel and the same three buttons."],
+        ["Alex Morgan", "I love that. What does it cost us?"],
+        ["Lena Fischer", "Slightly more per room up front, but fewer support calls. And lecture capture can be built into the same panel, which faculty keep asking for."],
+        ["Alex Morgan", "Let's adopt it for the four spring rooms and see how it goes. Can you get it to Facilities before their design deadline?"],
+        ["Lena Fischer", "I'll have it to them by November first."]
+      ]
+    }
+  ],
+  "captions": "So the pilot starts November tenth with IT and Finance. Finance has the most apps per person, so if anything breaks, we'll find it quickly. I have office hours scheduled for the first two days, and Marcus will watch the identity server logs with me.\n\nGood. What does the help desk need from us? That's the part I'm less sure about. The pilot is small, but in January every student hits the enrollment screen in the same week. Dana's team will get the calls, and right now the knowledge base articles are written for staff, not for students. Let's get ahead of that. I'll talk to Dana about adding two extra shifts for cutover week. Could you work with Communications on the student email?"
+}

@@ -104,6 +104,43 @@ final class LiveCaptioner {
         partial = ""
     }
 
+    #if DEBUG
+    /// `-simulateCaptions <file>` (Mac DEBUG, with `-simulateMicrophone`):
+    /// show `text` the way the live model would, a few words at a time —
+    /// committed sentence by sentence, the current one as the partial — so
+    /// screenshots show captions without the caption model. Text before a
+    /// blank line is shown at once, as if already captioned.
+    func debugPlay(_ text: String, wordsPerSecond: Double = 3) {
+        pumpTask?.cancel()
+        status = .live
+        partial = ""
+        var text = text
+        if let split = text.range(of: "\n\n") {
+            committed = text[..<split.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines) + " "
+            text = String(text[split.upperBound...])
+        } else {
+            committed = ""
+        }
+        var sentences: [String] = []
+        text.enumerateSubstrings(in: text.startIndex..., options: .bySentences) { sentence, _, _, _ in
+            if let s = sentence?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty { sentences.append(s) }
+        }
+        pumpTask = Task { [weak self] in
+            for sentence in sentences {
+                let words = sentence.split(separator: " ")
+                for count in 1...words.count {
+                    try? await Task.sleep(for: .seconds(1 / wordsPerSecond))
+                    guard let self, !Task.isCancelled else { return }
+                    self.partial = words.prefix(count).joined(separator: " ")
+                }
+                guard let self else { return }
+                self.committed += sentence + " "
+                self.partial = ""
+            }
+        }
+    }
+    #endif
+
     private func apply(_ update: LiveTranscriptionEngine.Update) {
         if let delta = update.committedDelta {
             committed += delta

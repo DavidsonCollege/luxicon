@@ -56,6 +56,15 @@ A native Mac app (Apple silicon only, macOS 15 or later) that records and
 transcribes on the Mac itself, entirely on-device, and keeps its sessions in
 the same `~/Luxicon` library the phone pushes into and the MCP server reads.
 
+<p>
+  <img src="marketing/screenshots/mac/1-main.png" width="60%" alt="Luxicon for Mac main window: people in the sidebar, a person's sessions from the Mac and iPhone, and a session's AI summary with key topics, decisions, and action items above its speaker-labeled transcript">
+  <img src="marketing/screenshots/mac/3-recording.png" width="32%" alt="Luxicon for Mac recording window: running timer, level meter, live captions, microphone picker, and Stop &amp; Transcribe button">
+</p>
+
+<sub>Screenshots use a fictional demo library (`scripts/mac-demo-fixture/`). More:
+[dark mode](marketing/screenshots/mac/2-main-dark.png),
+[muted = off the record](marketing/screenshots/mac/4-muted.png).</sub>
+
 - **Download:** the signed, notarized `Luxicon-<version>-<build>.dmg` from the
   [GitHub Releases](https://github.com/DavidsonCollege/luxicon/releases) page
   (look for tags starting `mac-v`). Open the DMG and drag Luxicon to

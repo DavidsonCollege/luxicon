@@ -64,6 +64,28 @@ extension Store {
         return outcome
     }
 
+    /// Push the user's own voice print (for Luxicon for Mac). Not tied to any
+    /// session, so nothing is recorded in the store; the caller shows the result.
+    func sendVoicePrintToMac() async -> PushOutcome {
+        let token = syncToken.trimmingCharacters(in: .whitespaces)
+        guard !token.isEmpty, let embedding = myVoiceEmbedding else {
+            return .notConfigured
+        }
+        do {
+            let payload = try VoicePrintFile(name: myName, embedding: embedding).encoded()
+            let host = syncHost.trimmingCharacters(in: .whitespaces)
+            try await LuxiconSync.push(
+                filename: VoicePrintFile.filename,
+                payload: payload,
+                token: token,
+                host: host.isEmpty ? nil : host
+            )
+            return .success
+        } catch {
+            return .failure((error as? LocalizedError)?.errorDescription ?? "\(error)")
+        }
+    }
+
     /// Write the outcome onto the stored session (looked up by id — the
     /// parameter is a value copy, and the session may have been deleted
     /// mid-push).

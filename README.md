@@ -167,7 +167,8 @@ asks first.
   - **Mac sync** — when you pair a Mac, transcripts and summaries you push
     (or all new ones, if you enable auto-push) travel over your local network
     to that Mac, encrypted with a key derived from the pairing token. Nothing
-    goes to the internet. See [docs/sync.md](docs/sync.md).
+    goes to the internet. **Send My Voice to Mac** copies only your voice
+    fingerprint, and only when you tap it. See [docs/sync.md](docs/sync.md).
   - **Vocabulary / people URL sync** — when you point the app at a vocabulary
     or people-roster file URL, it fetches them (https only, no cross-host
     redirects) when opened.

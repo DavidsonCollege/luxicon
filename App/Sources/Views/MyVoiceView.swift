@@ -13,6 +13,8 @@ struct MyVoiceView: View {
     @State private var errorMessage: String?
     @State private var showingMicDeniedAlert = false
     @State private var showingAboutGiving = false
+    @State private var isSendingVoice = false
+    @State private var voiceSendResult: String?
     @Environment(\.openURL) private var openURL
 
     private static let minSeconds: Double = 8
@@ -176,10 +178,37 @@ struct MyVoiceView: View {
                     Toggle("Push automatically after each 1-on-1", isOn: $store.autoPushToMac)
                         .onChange(of: store.autoPushToMac) { store.save() }
                 }
+                if !store.syncToken.isEmpty, store.myVoiceEmbedding != nil {
+                    Button {
+                        isSendingVoice = true
+                        Task {
+                            let outcome = await store.sendVoicePrintToMac()
+                            isSendingVoice = false
+                            switch outcome {
+                            case .success:
+                                voiceSendResult = "Your voice print is on your Mac. Open Luxicon for Mac to use it."
+                            case .failure(let message):
+                                voiceSendResult = message
+                            case .notConfigured, .skipped:
+                                break
+                            }
+                        }
+                    } label: {
+                        if isSendingVoice {
+                            HStack {
+                                ProgressView()
+                                Text("Sending…").padding(.leading, 8)
+                            }
+                        } else {
+                            Label("Send My Voice to Mac", systemImage: "laptopcomputer.and.arrow.down")
+                        }
+                    }
+                    .disabled(isSendingVoice)
+                }
             } header: {
                 Text("Mac sync")
             } footer: {
-                Text("Send transcripts and summaries to a Mac running `luxicon-mcp listen`, so you can query them from Claude. Everything stays on your local network. Use “Send installer link to your Mac” to AirDrop the listener installer over, then enter the Mac's address if it isn't found automatically (common on enterprise Wi-Fi that blocks discovery).")
+                Text("Send transcripts and summaries to a Mac running `luxicon-mcp listen`, so you can query them from Claude. Everything stays on your local network. Use “Send installer link to your Mac” to AirDrop the listener installer over, then enter the Mac's address if it isn't found automatically (common on enterprise Wi-Fi that blocks discovery). Send My Voice to Mac copies only your voice fingerprint, and only when you tap it.")
             }
 
             Section {
@@ -220,6 +249,14 @@ struct MyVoiceView: View {
             Button("Not Now", role: .cancel) {}
         } message: {
             Text("Luxicon can't hear you until microphone access is turned on in Settings.")
+        }
+        .alert("Send My Voice to Mac", isPresented: Binding(
+            get: { voiceSendResult != nil },
+            set: { if !$0 { voiceSendResult = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(voiceSendResult ?? "")
         }
         .onDisappear {
             if isRecording { _ = recorder.stop() }

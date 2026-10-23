@@ -28,7 +28,8 @@ by Apple; end-to-end encrypted if you enable Advanced Data Protection).
 - **Mac sync** (optional, off by default): if you pair a Mac, transcripts
   and summaries you choose to push travel over your local network to that
   Mac, encrypted with a key derived from your pairing token. They do not
-  cross the internet.
+  cross the internet. "Send My Voice to Mac" copies only your voice
+  fingerprint (256 numbers, not audio), and only when you tap it.
 - **Vocabulary URL sync** (optional, off by default): if you configure a
   vocabulary URL, the app fetches that file over https when opened.
 - **People URL sync** (optional, off by default): if you configure a

@@ -104,6 +104,14 @@ Housekeeping:
 - The listener prints the pairing token at startup, so the log file is as
   sensitive as `.sync-token` — both are readable only by your account.
 
+## Voice print
+
+**My Voice → Mac sync → Send My Voice to Mac** pushes your enrolled voice
+fingerprint (256 numbers, no audio) as `luxicon-voiceprint.json`, which lands
+in the library folder (`~/Luxicon`) next to the sessions. It is sent only when
+you tap the button, and the library scan ignores it. Luxicon for Mac asks
+before using it to recognize you.
+
 ## When a push fails
 
 Each session shows its sync state (small laptop mark on the row; open the

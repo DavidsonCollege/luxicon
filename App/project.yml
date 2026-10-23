@@ -39,7 +39,8 @@ targets:
           All processing happens on this device; audio never leaves your phone.
         NSLocalNetworkUsageDescription: >-
           Luxicon uses the local network only if you set up Mac sync: to find
-          your Mac and send it the transcripts you choose to sync. Without Mac
+          your Mac and send it the transcripts you choose to sync, and, only when you
+          tap Send My Voice to Mac, your voice fingerprint. Without Mac
           sync, the local network is never used.
         NSBonjourServices:
           - _luxicon._tcp

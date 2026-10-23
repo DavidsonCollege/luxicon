@@ -1,5 +1,6 @@
 #!/bin/bash
-# Build, Developer-ID-sign, package (DMG), notarize, and staple Luxicon for Mac.
+# Build, Developer-ID-sign, notarize and staple the app, package it (DMG),
+# then notarize and staple the DMG, for Luxicon for Mac.
 #
 # Output: dist/Luxicon-<marketing>-<build>.dmg
 #
@@ -27,6 +28,12 @@ if [ "$SKIP_NOTARIZE" != "1" ]; then
     fi
 fi
 
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    echo "warning: the git tree has uncommitted changes; a release should be built from a" >&2
+    echo "         committed state (continuing)." >&2
+    git status --short >&2
+fi
+
 WORK=$(mktemp -d)
 MOUNT=""
 cleanup() {
@@ -34,6 +41,28 @@ cleanup() {
     rm -rf "$WORK"
 }
 trap cleanup EXIT
+
+# notarize <file> <label>: submit to the notary service (keychain profile
+# `luxicon`), wait, and fail unless the status is Accepted, printing the
+# notary log when there is one.
+notarize() {
+    local file=$1 label=$2
+    local json="$WORK/notarize-$label.json"
+    echo "==> Notarizing $label (keychain profile: luxicon)"
+    xcrun notarytool submit "$file" --keychain-profile luxicon --wait \
+        --output-format json > "$json" || true
+    cat "$json"
+    local status id
+    status=$(plutil -extract status raw -o - "$json" 2>/dev/null || echo unknown)
+    if [ "$status" != "Accepted" ]; then
+        id=$(plutil -extract id raw -o - "$json" 2>/dev/null || echo "")
+        echo "error: $label notarization status is '$status' (submission id: ${id:-unknown})" >&2
+        if [ -n "$id" ]; then
+            xcrun notarytool log "$id" --keychain-profile luxicon >&2 || true
+        fi
+        exit 1
+    fi
+}
 
 echo "==> xcodegen"
 (cd App && xcodegen generate)
@@ -80,6 +109,24 @@ if [ "$KEYS" != '{"com.apple.security.device.audio-input":true}' ]; then
 fi
 echo "    entitlements: audio-input only (true)"
 
+echo "==> Checking for the MLX Metal library"
+# Diarization needs MLX's compiled shaders; without them it fails at runtime.
+METALLIBS=$(find "$APP/Contents/Resources" -name '*.metallib' -type f)
+if [ -z "$METALLIBS" ]; then
+    echo "error: no *.metallib under $APP/Contents/Resources (MLX shaders missing)" >&2
+    exit 1
+fi
+sed "s|^$APP/|    |" <<<"$METALLIBS"
+
+if [ "$SKIP_NOTARIZE" != "1" ]; then
+    # Notarize and staple the app itself, so a copy dragged out of the DMG
+    # carries its own ticket and validates offline.
+    ditto -c -k --keepParent "$APP" "$WORK/Luxicon.zip"
+    notarize "$WORK/Luxicon.zip" app
+    xcrun stapler staple "$APP"
+    xcrun stapler validate "$APP"
+fi
+
 echo "==> Staging DMG"
 STAGE="$WORK/stage"
 mkdir -p "$STAGE" dist
@@ -104,20 +151,7 @@ if [ "$SKIP_NOTARIZE" = "1" ]; then
     exit 0
 fi
 
-echo "==> Notarizing (keychain profile: luxicon)"
-SUBMIT_JSON="$WORK/notarize.json"
-xcrun notarytool submit "$DMG" --keychain-profile luxicon --wait \
-    --output-format json > "$SUBMIT_JSON" || true
-cat "$SUBMIT_JSON"
-NOTARY_STATUS=$(plutil -extract status raw -o - "$SUBMIT_JSON" 2>/dev/null || echo unknown)
-if [ "$NOTARY_STATUS" != "Accepted" ]; then
-    NOTARY_ID=$(plutil -extract id raw -o - "$SUBMIT_JSON" 2>/dev/null || echo "")
-    echo "error: notarization status is '$NOTARY_STATUS' (submission id: ${NOTARY_ID:-unknown})" >&2
-    if [ -n "$NOTARY_ID" ]; then
-        xcrun notarytool log "$NOTARY_ID" --keychain-profile luxicon >&2 || true
-    fi
-    exit 1
-fi
+notarize "$DMG" dmg
 xcrun stapler staple "$DMG"
 xcrun stapler validate "$DMG"
 

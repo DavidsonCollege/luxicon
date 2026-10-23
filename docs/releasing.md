@@ -3,8 +3,8 @@
 How to ship each artifact, exactly which credentials each step uses, and
 where those credentials live. Written for agents working on JD's Mac
 (`W230033`); every flow below was verified working on 2026-07-09. Agent
-machines may differ: this repo has also been released from `w270286`, so
-check which credentials actually exist on the machine you are on (the
+machines may differ: this repo is also set up for releasing from `w270286`
+(nothing has been released from it yet), so check which credentials actually exist on the machine you are on (the
 inventory below says what to look for) before assuming a flow works.
 
 **This repo is public. Never write credential VALUES into it — only the
@@ -171,12 +171,16 @@ scripts/build-mac-app.sh
 ```
 
 Runs xcodegen, archives the `LuxiconMac` scheme (arm64 only), exports with
-`packaging/mac-export-options.plist`, verifies the signature and the
-`audio-input` entitlement, builds `dist/Luxicon-<marketing>-<build>.dmg`
-(app + Applications symlink), signs the DMG, notarizes (`--wait`), staples,
-and Gatekeeper-checks both the DMG and the app inside it. Expected final
-output: `accepted / source=Notarized Developer ID` for both. Bump
-`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `App/project.yml` first.
+`packaging/mac-export-options.plist`, verifies the signature, the
+`audio-input` entitlement, and that the MLX `*.metallib` made it into the
+app's Resources, then notarizes and staples the **app** (zipped with
+`ditto`), so a copy dragged out of the DMG validates offline. Then it builds
+`dist/Luxicon-<marketing>-<build>.dmg` (app + Applications symlink), signs
+the DMG, notarizes and staples it too, and Gatekeeper-checks both the DMG
+and the app inside it. Expected final output: `accepted / source=Notarized
+Developer ID` for both. It warns (doesn't fail) on a dirty git tree: a
+release should be built from a committed state. Bump `MARKETING_VERSION` /
+`CURRENT_PROJECT_VERSION` in `App/project.yml` first.
 
 Credentials it uses (locations only):
 

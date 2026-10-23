@@ -34,6 +34,11 @@ shift 3
 BIN="$APP/Contents/MacOS/Luxicon"
 STORE_JSON="$FIXTURE/store/store.json"
 [[ -x "$BIN" ]] || { echo "error: no executable at $BIN" >&2; exit 1; }
+# Refuse a Release app: it ignores -libraryPath/-storePath and would open the
+# real store and ~/Luxicon. DebugLaunchOptions (DEBUG-only) is the only code
+# with this flag name; Debug builds may keep it in Luxicon.debug.dylib.
+grep -aqF -- "-seedSessionFromWAV" "$APP"/Contents/MacOS/* 2>/dev/null \
+    || { echo "error: $APP is not a DEBUG build (no DebugLaunchOptions); refusing to run" >&2; exit 1; }
 [[ -f "$STORE_JSON" ]] || { echo "error: no $STORE_JSON (generate the fixture store first)" >&2; exit 1; }
 [[ "$(cd "$FIXTURE/lib" && pwd -P)" != "$(cd ~/Luxicon 2>/dev/null && pwd -P || echo none)" ]] \
     || { echo "error: fixture lib is ~/Luxicon" >&2; exit 1; }

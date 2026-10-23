@@ -39,8 +39,12 @@ echo "==> xcodegen"
 (cd App && xcodegen generate)
 
 echo "==> Reading version"
-SETTINGS=$(cd App && xcodebuild -project Luxicon.xcodeproj -scheme LuxiconMac \
-    -configuration Release "${XCFLAGS[@]}" -showBuildSettings 2>/dev/null)
+if ! SETTINGS=$(cd App && xcodebuild -project Luxicon.xcodeproj -scheme LuxiconMac \
+    -configuration Release "${XCFLAGS[@]}" -showBuildSettings 2>"$WORK/settings.err"); then
+    echo "error: xcodebuild -showBuildSettings failed:" >&2
+    cat "$WORK/settings.err" >&2
+    exit 1
+fi
 MARKETING=$(awk -F' = ' '/^ *MARKETING_VERSION = /{print $2; exit}' <<<"$SETTINGS")
 BUILD=$(awk -F' = ' '/^ *CURRENT_PROJECT_VERSION = /{print $2; exit}' <<<"$SETTINGS")
 [ -n "$MARKETING" ] && [ -n "$BUILD" ] || { echo "error: could not read version" >&2; exit 1; }
@@ -62,12 +66,19 @@ APP="$WORK/export/Luxicon.app"
 
 echo "==> Verifying signature"
 codesign --verify --deep --strict --verbose=2 "$APP"
-ENT=$(codesign -d --entitlements - "$APP" 2>&1)
-if ! grep -q "audio-input" <<<"$ENT"; then
-    echo "error: app is missing the audio-input entitlement" >&2
+SIGINFO=$(codesign -dv "$APP" 2>&1)
+if ! grep -Eq 'flags=0x[0-9a-f]+\(.*runtime.*\)' <<<"$SIGINFO"; then
+    echo "error: app is not signed with the hardened runtime" >&2
     exit 1
 fi
-echo "    entitlements include audio-input"
+echo "    hardened runtime enabled"
+codesign -d --entitlements - --xml "$APP" > "$WORK/entitlements.plist" 2>/dev/null
+KEYS=$(plutil -convert json -o - "$WORK/entitlements.plist")
+if [ "$KEYS" != '{"com.apple.security.device.audio-input":true}' ]; then
+    echo "error: unexpected entitlements (want only audio-input=true): $KEYS" >&2
+    exit 1
+fi
+echo "    entitlements: audio-input only (true)"
 
 echo "==> Staging DMG"
 STAGE="$WORK/stage"
@@ -94,7 +105,19 @@ if [ "$SKIP_NOTARIZE" = "1" ]; then
 fi
 
 echo "==> Notarizing (keychain profile: luxicon)"
-xcrun notarytool submit "$DMG" --keychain-profile luxicon --wait
+SUBMIT_JSON="$WORK/notarize.json"
+xcrun notarytool submit "$DMG" --keychain-profile luxicon --wait \
+    --output-format json > "$SUBMIT_JSON" || true
+cat "$SUBMIT_JSON"
+NOTARY_STATUS=$(plutil -extract status raw -o - "$SUBMIT_JSON" 2>/dev/null || echo unknown)
+if [ "$NOTARY_STATUS" != "Accepted" ]; then
+    NOTARY_ID=$(plutil -extract id raw -o - "$SUBMIT_JSON" 2>/dev/null || echo "")
+    echo "error: notarization status is '$NOTARY_STATUS' (submission id: ${NOTARY_ID:-unknown})" >&2
+    if [ -n "$NOTARY_ID" ]; then
+        xcrun notarytool log "$NOTARY_ID" --keychain-profile luxicon >&2 || true
+    fi
+    exit 1
+fi
 xcrun stapler staple "$DMG"
 xcrun stapler validate "$DMG"
 

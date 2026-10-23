@@ -93,5 +93,17 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
+    /// Quitting mid-recording asks first, in the recording window, with the
+    /// same Save / Discard / Keep Recording question as closing it. Save
+    /// finalizes the audio into a `.recorded` session before the app exits.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard store.processing.recordingActive, navigation.recordingPerson != nil else {
+            return .terminateNow
+        }
+        navigation.pendingQuit = true
+        navigation.recordWindowRequest += 1
+        return .terminateLater
+    }
+
     private var ownedIds: Set<UUID> { Set(store.sessions.map(\.id)) }
 }

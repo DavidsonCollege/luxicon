@@ -146,14 +146,17 @@ private struct MacRecordingSession: View {
         .background {
             Color.clear
                 .alert("Stop and save this recording?", isPresented: $confirmingClose) {
-                    Button("Save") { stopAndSave() }
-                    Button("Discard", role: .destructive) { discard() }
-                    Button("Keep Recording", role: .cancel) {}
+                    Button("Save") { answerClose(.save) }
+                    Button("Discard", role: .destructive) { answerClose(.discard) }
+                    Button("Keep Recording", role: .cancel) { answerClose(.keep) }
                 } message: {
                     Text("Save stops the recording and transcribes it. Discarded audio cannot be recovered.")
                 }
         }
         .background(WindowAccessor { closeGuard.attach(to: $0) })
+        .onChange(of: navigation.pendingQuit) { _, pending in
+            if pending { askBeforeQuitting() }
+        }
         .onAppear(perform: begin)
         .onDisappear(perform: cleanUp)
         .task {
@@ -266,6 +269,7 @@ private struct MacRecordingSession: View {
             confirmingClose = true
             #if DEBUG
             DebugRecording.log("close requested while recording: asking to save")
+            DebugRecording.answerPromptIfAsked(answerClose)
             #endif
             return false
         }
@@ -285,6 +289,17 @@ private struct MacRecordingSession: View {
                     microphoneDenied = true
                     return
                 }
+            }
+            #if DEBUG
+            await DebugRecording.permissionDelayIfAsked()
+            #endif
+            // The window may have closed while the permission prompt was up:
+            // never start a recording nobody can see or stop.
+            guard !finished else {
+                #if DEBUG
+                DebugRecording.log("window closed before the microphone started: not recording")
+                #endif
+                return
             }
             do {
                 let fileURL = try store.beginRecording(id: sessionId, person: person)
@@ -306,6 +321,36 @@ private struct MacRecordingSession: View {
                 startError = "Could not start recording: \(error.localizedDescription)"
             }
         }
+    }
+
+    /// The "Stop and save this recording?" choice, from closing the window
+    /// or quitting the app mid-recording.
+    private func answerClose(_ answer: RecordingCloseAnswer) {
+        confirmingClose = false
+        #if DEBUG
+        DebugRecording.log("prompt answered: \(answer.rawValue)")
+        #endif
+        switch answer {
+        case .save: stopAndSave()
+        case .discard: discard()
+        case .keep: navigation.resolvePendingQuit(quit: false)
+        }
+    }
+
+    /// ⌘Q arrived mid-recording (the app is holding the quit with
+    /// `.terminateLater`): bring this window forward and ask.
+    private func askBeforeQuitting() {
+        guard recorder.isRecording, !saving, !finished else {
+            navigation.resolvePendingQuit(quit: true)
+            return
+        }
+        closeGuard.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate()
+        confirmingClose = true
+        #if DEBUG
+        DebugRecording.log("quit requested while recording: asking to save")
+        DebugRecording.answerPromptIfAsked(answerClose)
+        #endif
     }
 
     private func goOffRecord() {
@@ -348,6 +393,9 @@ private struct MacRecordingSession: View {
             close()
             return
         }
+        #if DEBUG
+        DebugRecording.blockSaveIfAsked(store: store, sessionId: sessionId)
+        #endif
         do {
             let session = try store.finishRecording(id: sessionId, duration: duration)
             #if DEBUG
@@ -357,20 +405,33 @@ private struct MacRecordingSession: View {
                 navigation.sleepStoppedSessions.append(session.id)
                 // The wake alert is shown on the main window.
                 openWindow(id: LuxiconMacApp.mainWindowID)
-            } else {
+            } else if !navigation.pendingQuit {
+                // Quitting: leave it `.recorded` to transcribe next time.
                 store.startProcessing(session)
             }
             close()
         } catch {
-            // The audio stays on disk as an in-progress recording; crash
-            // recovery turns it into a session on next launch.
-            startError = "Could not save recording: \(error.localizedDescription)"
+            // The audio stays on disk as an in-progress recording, and crash
+            // recovery turns it into a session on next launch. `finished`
+            // keeps cleanUp() from discarding it when the window closes.
+            finished = true
             saving = false
+            recorder.onSystemSleep = nil
+            store.setRecordingActive(false)
+            startError = "Could not save recording: \(error.localizedDescription) "
+                + "The audio is kept and will be recovered the next time Luxicon opens."
+            #if DEBUG
+            DebugRecording.log("save failed (\(error.localizedDescription)); in-progress files kept for recovery")
+            #endif
+            // Cancel a pending quit so the error is seen; quitting again
+            // goes straight through (nothing is recording any more).
+            navigation.resolvePendingQuit(quit: false)
         }
     }
 
     private func close() {
         finished = true
+        recorder.onSystemSleep = nil
         store.setRecordingActive(false)
         let window = closeGuard.window
         closeGuard.detach()
@@ -383,6 +444,8 @@ private struct MacRecordingSession: View {
         }
         dismissWindow(id: MacRecordView.windowID)
         navigation.recordingPerson = nil
+        // A quit waiting on this recording can go ahead: it's saved or gone.
+        navigation.resolvePendingQuit(quit: true)
         #if DEBUG
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(500))
@@ -402,12 +465,18 @@ private struct MacRecordingSession: View {
             finished = true
         }
         captioner.reset()
+        recorder.onSystemSleep = nil
         store.setRecordingActive(false)
         closeGuard.detach()
         if navigation.recordingPerson?.id == person.id {
             navigation.recordingPerson = nil
         }
     }
+}
+
+/// The answer to "Stop and save this recording?".
+enum RecordingCloseAnswer: String {
+    case save, discard, keep
 }
 
 // MARK: - Window close guard
@@ -439,6 +508,8 @@ final class WindowCloseGuard: NSObject, NSWindowDelegate {
         }
         window = nil
         retired = true
+        // Drop the closure (it captures the recording view's state).
+        shouldClose = { true }
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {

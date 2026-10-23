@@ -19,6 +19,18 @@ import LuxiconKit
 ///   window the way the close button does (`performClose`).
 /// - `-simulateStopAfter <s>`: once `s` seconds are recorded, run Stop &
 ///   Transcribe.
+/// - `-simulateQuitAfter <s>`: once `s` seconds are recorded, quit (⌘Q's
+///   `NSApp.terminate`).
+/// - `-answerPromptWith save|discard|keep`: answer the "Stop and save this
+///   recording?" prompt 1 s after it appears.
+/// - `-simulateSaveFailure`: make saving fail (a file already sits where
+///   the finished audio would be moved).
+/// - `-simulatePermissionDelay <s>` with `-simulateEarlyClose`: the start
+///   waits `s` seconds (standing in for the permission prompt) while the
+///   window is closed right after it opens.
+///
+/// Timed hooks count recorded seconds, which hold still after a stop, so
+/// a hook with the same time as a stop fires right after it.
 ///
 /// Progress is logged to stderr with a `[record]` prefix.
 @MainActor
@@ -53,6 +65,31 @@ enum DebugRecording {
         }
     }
 
+    static func answerPromptIfAsked(_ answer: @escaping (RecordingCloseAnswer) -> Void) {
+        guard let raw = value(after: "-answerPromptWith"),
+              let choice = RecordingCloseAnswer(rawValue: raw) else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            log("answering the prompt: \(choice.rawValue)")
+            answer(choice)
+        }
+    }
+
+    static func permissionDelayIfAsked() async {
+        guard let delay = seconds(after: "-simulatePermissionDelay") else { return }
+        log("simulating a \(delay) s permission prompt")
+        try? await Task.sleep(for: .seconds(delay))
+    }
+
+    static func blockSaveIfAsked(store: Store, sessionId: UUID) {
+        guard arguments.contains("-simulateSaveFailure") else { return }
+        let blocker = store.inProgressAudioURL(id: sessionId)
+            .deletingLastPathComponent()
+            .appendingPathComponent("\(sessionId.uuidString).wav")
+        FileManager.default.createFile(atPath: blocker.path, contents: Data("blocker".utf8))
+        log("simulating a save failure: blocker at \(blocker.lastPathComponent)")
+    }
+
     private static var didRequest = false
 
     static func requestRecordingIfAsked(store: Store, navigation: MacNavigation) {
@@ -83,17 +120,30 @@ enum DebugRecording {
             log("window frame \(window.frame.size), content \(window.contentLayoutRect.size), "
                 + "resizable \(window.styleMask.contains(.resizable)), title \"\(window.title)\"")
         }
+        if arguments.contains("-simulateEarlyClose") {
+            log("simulating the close button before recording starts")
+            closeGuard.window?.performClose(nil)
+        }
         var pending: [(after: Double, name: String, run: () -> Void)] = []
+        if let after = seconds(after: "-simulateStopAfter") {
+            pending.append((after, "stop", {
+                log("simulating Stop & Transcribe")
+                stop()
+            }))
+        }
         if let after = seconds(after: "-simulateCloseAfter") {
             pending.append((after, "close", {
                 log("simulating the close button")
                 closeGuard.window?.performClose(nil)
             }))
         }
-        if let after = seconds(after: "-simulateStopAfter") {
-            pending.append((after, "stop", {
-                log("simulating Stop & Transcribe")
-                stop()
+        if let after = seconds(after: "-simulateQuitAfter") {
+            pending.append((after, "quit", {
+                log("simulating ⌘Q")
+                // From a run-loop timer, like a real ⌘Q event: calling
+                // terminate inside this main-queue task would block the
+                // queue for the whole held quit (`.terminateLater`).
+                NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
             }))
         }
         if let after = seconds(after: "-simulateSleepAfter") {
@@ -108,10 +158,13 @@ enum DebugRecording {
                 }
             }))
         }
-        pending.sort { $0.after < $1.after }
+        // Stable by time: stop is listed before close for equal times.
+        pending = pending.enumerated()
+            .sorted { ($0.element.after, $0.offset) < ($1.element.after, $1.offset) }
+            .map(\.element)
         while !pending.isEmpty, !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(200))
-            guard recorder.isRecording, recorder.duration >= pending[0].after else { continue }
+            guard recorder.duration > 0, recorder.duration >= pending[0].after else { continue }
             pending.removeFirst().run()
         }
     }

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import LuxiconKit
 
@@ -41,6 +42,16 @@ final class MacNavigation {
     /// processed on wake, when the main window explains what happened.
     var sleepStoppedSessions: [UUID] = []
     var showingSleepStopAlert = false
+    /// ⌘Q arrived mid-recording; the app is waiting (`.terminateLater`)
+    /// for the recording window's Save / Discard / Keep Recording answer.
+    var pendingQuit = false
+
+    /// Answer a held quit: go ahead, or stay open. No-op when none is held.
+    func resolvePendingQuit(quit: Bool) {
+        guard pendingQuit else { return }
+        pendingQuit = false
+        NSApp.reply(toApplicationShouldTerminate: quit)
+    }
     var searchText = ""
     /// New Recording with no person selected asks who it's with first.
     var showingRecordingPicker = false

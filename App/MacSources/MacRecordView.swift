@@ -330,7 +330,11 @@ private struct MacRecordingSession: View {
                 #if DEBUG
                 DebugRecording.log("recording \(sessionId)\(simulatedInput == nil ? "" : " (simulated input)")")
                 // Simulated runs stay offline: no caption-model download.
-                if simulatedInput == nil { captioner.start() }
+                if simulatedInput == nil {
+                    captioner.start()
+                } else if let captions = DebugRecording.simulatedCaptions() {
+                    captioner.debugPlay(captions)
+                }
                 #else
                 captioner.start()
                 #endif

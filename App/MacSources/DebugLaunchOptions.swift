@@ -44,7 +44,7 @@ enum DebugLaunchOptions {
         "-importPeople": 1, "-importVocabulary": 1, "-importPhotos": 1, "-myName": 1,
         "-seedSessionFromWAV": 2, "-deletePersonNamed": 1,
         "-route": 1, "-windowSize": 1, "-appearance": 1,
-        "-recordWith": 1, "-simulateMicrophone": 1, "-answerPromptWith": 1,
+        "-recordWith": 1, "-simulateMicrophone": 1, "-simulateCaptions": 1, "-answerPromptWith": 1,
         "-simulateSleepAfter": 1, "-simulateCloseAfter": 1, "-simulateStopAfter": 1,
         "-simulateQuitAfter": 1, "-simulatePermissionDelay": 1,
         "-simulateMuteAt": 1, "-simulateUnmuteAt": 1, "-simulateMuteSource": 1, "-simulateStartMuted": 1,

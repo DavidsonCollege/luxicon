@@ -13,6 +13,9 @@ import LuxiconKit
 ///   or touch the microphone.
 /// - `-simulateMicrophone <audio file>`: record that file (looped, in real
 ///   time) instead of the microphone. Live captions stay off.
+/// - `-simulateCaptions <text file>` (with `-simulateMicrophone`): show that
+///   text as live captions, a few words at a time (no caption model);
+///   text before a blank line shows at once.
 /// - `-simulateSleepAfter <s>`: once `s` seconds are recorded, post
 ///   `NSWorkspace.willSleepNotification` (the Recorder's real observer runs
 ///   `onSystemSleep`), then `didWakeNotification` 2 s later.
@@ -103,6 +106,16 @@ enum DebugRecording {
             log("simulated input failed to load: \(error)")
             return nil
         }
+    }
+
+    static func simulatedCaptions() -> String? {
+        guard let path = value(after: "-simulateCaptions") else { return nil }
+        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            log("simulated captions failed to load: \(url.path)")
+            return nil
+        }
+        return text
     }
 
     static func answerPromptIfAsked(_ answer: @escaping (RecordingCloseAnswer) -> Void) {

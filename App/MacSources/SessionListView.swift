@@ -241,7 +241,7 @@ struct SessionListView: View {
                         }
                         Spacer()
                         Button {
-                            navigation.recordingPerson = person
+                            navigation.requestRecording(with: person)
                         } label: {
                             Label("Record", systemImage: "record.circle")
                         }

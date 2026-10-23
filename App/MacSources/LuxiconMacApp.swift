@@ -24,6 +24,18 @@ struct LuxiconMacApp: App {
                         navigation: appDelegate.navigation)
         }
 
+        // One recording at a time, in its own fixed-size window. Never
+        // restored or opened at launch; ⌘N and the record buttons open it.
+        Window("Recording", id: MacRecordView.windowID) {
+            MacRecordView()
+                .environment(appDelegate.store)
+                .environment(appDelegate.navigation)
+        }
+        .windowResizability(.contentSize)
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
+        .commandsRemoved()
+
         Settings {
             MacSettingsView()
                 .environment(appDelegate.store)
@@ -46,6 +58,15 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         // Writes store.json on first launch, so the location exists.
         store.save()
         library.startWatching { [store] in Set(store.sessions.map(\.id)) }
+        // A recording stopped by sleep is processed once the Mac is back.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.navigation.handleWake(store: self.store)
+            }
+        }
         Task {
             await library.reload(ownedIds: ownedIds)
             #if DEBUG

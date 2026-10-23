@@ -28,9 +28,19 @@ final class MacNavigation {
         didSet { if oldValue != sidebar { session = nil } }
     }
     var session: SessionRef?
-    /// Set to start a recording with this person (the recording window
-    /// reacts to it).
+    /// Who the recording in the "Recording" window is with; nil when none
+    /// is in progress. Set it through `requestRecording(with:)`.
     var recordingPerson: Person?
+    /// Identifies the current recording request, so each new recording
+    /// starts from fresh window state.
+    var recordingID = UUID()
+    /// Bumped to bring the recording window forward (the main window
+    /// observes it and calls `openWindow`).
+    var recordWindowRequest = 0
+    /// Sessions saved because the Mac went to sleep mid-recording; they're
+    /// processed on wake, when the main window explains what happened.
+    var sleepStoppedSessions: [UUID] = []
+    var showingSleepStopAlert = false
     var searchText = ""
     /// New Recording with no person selected asks who it's with first.
     var showingRecordingPicker = false
@@ -40,11 +50,40 @@ final class MacNavigation {
     /// ⌘N and the sidebar's record button: record with the selected person,
     /// or ask who the meeting is with.
     func beginNewRecording(store: Store) {
-        if case .person(let id) = sidebar, let person = store.person(id: id) {
-            recordingPerson = person
+        if recordingPerson != nil {
+            // One recording at a time: show the one in progress.
+            recordWindowRequest += 1
+        } else if case .person(let id) = sidebar, let person = store.person(id: id) {
+            requestRecording(with: person)
         } else {
             showingRecordingPicker = true
         }
+    }
+
+    /// Start a recording with `person` and open its window. While one is
+    /// already in progress, this only brings that window forward.
+    func requestRecording(with person: Person) {
+        if recordingPerson == nil {
+            recordingPerson = person
+            recordingID = UUID()
+        }
+        recordWindowRequest += 1
+    }
+
+    /// The Mac woke: process what sleep interrupted, and say why the
+    /// recording stopped.
+    func handleWake(store: Store) {
+        guard !sleepStoppedSessions.isEmpty else { return }
+        for id in sleepStoppedSessions {
+            if let session = store.sessions.first(where: { $0.id == id }), session.status == .recorded {
+                #if DEBUG
+                DebugRecording.log("wake: processing \(id) (was .recorded)")
+                #endif
+                store.startProcessing(session)
+            }
+        }
+        sleepStoppedSessions = []
+        showingSleepStopAlert = true
     }
 }
 
@@ -61,6 +100,7 @@ struct MacRootView: View {
     @Environment(Store.self) private var store
     @Environment(LibraryIndex.self) private var library
     @Environment(MacNavigation.self) private var navigation
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -84,6 +124,25 @@ struct MacRootView: View {
         .sheet(isPresented: $navigation.showingRecordingPicker) {
             RecordingPersonPicker()
         }
+        .onChange(of: navigation.recordWindowRequest) {
+            openWindow(id: MacRecordView.windowID)
+        }
+        .background {
+            // Its own host, so it doesn't collide with the library alert.
+            Color.clear
+                .alert("Recording stopped because the Mac went to sleep.",
+                       isPresented: $navigation.showingSleepStopAlert) {
+                    Button("OK") {}
+                } message: {
+                    Text("The audio up to that point was saved.")
+                }
+        }
+        #if DEBUG
+        .onChange(of: navigation.showingSleepStopAlert) { _, showing in
+            if showing { DebugRecording.log("main window: sleep-stop alert shown") }
+        }
+        .task { DebugRecording.requestRecordingIfAsked(store: store, navigation: navigation) }
+        #endif
         .alert("Library Problem", isPresented: Binding(
             get: { store.startupWarning != nil || store.saveError != nil },
             set: { if !$0 { store.startupWarning = nil; store.saveError = nil } }
@@ -184,7 +243,7 @@ struct RecordingPersonPicker: View {
 
     private func start(_ id: UUID) {
         guard let person = store.person(id: id) else { return }
-        navigation.recordingPerson = person
+        navigation.requestRecording(with: person)
         dismiss()
     }
 }

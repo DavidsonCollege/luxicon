@@ -4,6 +4,9 @@ import LuxiconKit
 #if canImport(UIKit)
 import UIKit
 #endif
+#if os(macOS)
+import AppKit
+#endif
 
 enum RecorderError: LocalizedError {
     case microphoneAccessDenied
@@ -12,7 +15,11 @@ enum RecorderError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .microphoneAccessDenied:
+            #if os(macOS)
+            return "Microphone access is off for Luxicon. Turn it on in System Settings → Privacy & Security → Microphone."
+            #else
             return "Microphone access is off for Luxicon. Turn it on in Settings → Privacy & Security → Microphone."
+            #endif
         case .microphoneUnavailable:
             return "The microphone is unavailable right now."
         }
@@ -45,6 +52,24 @@ final class Recorder: @unchecked Sendable {
     private var fileURL: URL?
     private var runtimeErrorStorage: String?
     private var observers: [NSObjectProtocol] = []
+    #if os(macOS)
+    /// Registered on `NSWorkspace.shared.notificationCenter`, not the default
+    /// center, so they're tracked (and removed) separately.
+    private var workspaceObservers: [NSObjectProtocol] = []
+
+    /// Called on the main thread when the Mac is about to sleep while a
+    /// recording is in progress (including off the record). Sleep stops the
+    /// audio hardware, so the record window stops and saves here rather than
+    /// leaving a recording that silently stopped capturing. Set before `start`.
+    var onSystemSleep: (@MainActor () -> Void)?
+    #endif
+    #if DEBUG
+    /// DEBUG-only: when set before `start`, these 16 kHz samples are fed
+    /// (looped, in real time) through the normal write path instead of the
+    /// microphone, so the record flow can be exercised without mic access.
+    var simulatedInput: [Float]?
+    private var simulatedTimer: DispatchSourceTimer?
+    #endif
     private(set) var isRecording = false
     /// True while another audio session (phone call, Siri) holds the mic.
     private(set) var isInterrupted = false
@@ -127,8 +152,7 @@ final class Recorder: @unchecked Sendable {
         guard isRecording else { return [] }
         removeObservers()
         resumeRetryGeneration += 1
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        stopEngine()
         isRecording = false
         isInterrupted = false
         isPaused = false
@@ -158,8 +182,7 @@ final class Recorder: @unchecked Sendable {
         guard isRecording, !isPaused else { return }
         isPaused = true
         resumeRetryGeneration += 1
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        stopEngine()
         level = 0
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -198,6 +221,12 @@ final class Recorder: @unchecked Sendable {
     /// (Re)wire the tap and start the engine. Reads the CURRENT input format,
     /// so it is also the recovery path after route/configuration changes.
     private func startEngine() throws {
+        #if DEBUG
+        if let simulatedInput {
+            startSimulatedCapture(simulatedInput)
+            return
+        }
+        #endif
         let input = engine.inputNode
         input.removeTap(onBus: 0)
         let inputFormat = input.outputFormat(forBus: 0)
@@ -214,10 +243,55 @@ final class Recorder: @unchecked Sendable {
         try engine.start()
     }
 
+    /// Remove the tap and stop the engine (stop, off the record).
+    private func stopEngine() {
+        #if DEBUG
+        if simulatedInput != nil {
+            simulatedTimer?.cancel()
+            simulatedTimer = nil
+            return
+        }
+        #endif
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+    }
+
+    /// Whether audio is currently flowing into `consume`.
+    private var isCapturing: Bool {
+        #if DEBUG
+        if simulatedInput != nil { return simulatedTimer != nil }
+        #endif
+        return engine.isRunning
+    }
+
+    #if DEBUG
+    /// Feed `samples` in 100 ms chunks on a timer, like the engine's tap.
+    private func startSimulatedCapture(_ samples: [Float]) {
+        guard !samples.isEmpty else { return }
+        simulatedTimer?.cancel()
+        let chunkSize = Self.sampleRate / 10
+        var offset = 0
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "Recorder.simulatedInput"))
+        timer.schedule(deadline: .now() + 0.1, repeating: 0.1)
+        timer.setEventHandler { [weak self] in
+            var chunk: [Float] = []
+            chunk.reserveCapacity(chunkSize)
+            while chunk.count < chunkSize {
+                let take = min(chunkSize - chunk.count, samples.count - offset)
+                chunk.append(contentsOf: samples[offset..<(offset + take)])
+                offset = (offset + take) % samples.count
+            }
+            self?.ingest(chunk)
+        }
+        simulatedTimer = timer
+        timer.resume()
+    }
+    #endif
+
     private func resumeCapture() {
         // `!isPaused`: a phone call ending or a route change during an off-record
         // span must NOT silently restart capture — only the user's resume() does.
-        guard isRecording, !isPaused, !engine.isRunning else { return }
+        guard isRecording, !isPaused, !isCapturing else { return }
         do {
             #if os(iOS)
             try AVAudioSession.sharedInstance().setActive(true)
@@ -293,6 +367,15 @@ final class Recorder: @unchecked Sendable {
             self?.resumeCapture()
         })
         observers = installed
+        #if os(macOS)
+        // Sleep stops the audio hardware; let the owner stop and save first.
+        workspaceObservers = [NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.onSystemSleep?() }
+        }]
+        #endif
     }
 
     private func removeObservers() {
@@ -300,6 +383,12 @@ final class Recorder: @unchecked Sendable {
             NotificationCenter.default.removeObserver(observer)
         }
         observers = []
+        #if os(macOS)
+        for observer in workspaceObservers {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+        workspaceObservers = []
+        #endif
     }
 
     #if os(iOS)
@@ -350,12 +439,15 @@ final class Recorder: @unchecked Sendable {
         }
         guard error == nil, out.frameLength > 0, let channel = out.floatChannelData?[0] else { return }
 
-        let samples = UnsafeBufferPointer(start: channel, count: Int(out.frameLength))
-        var sumSquares: Float = 0
-        for s in samples { sumSquares += s * s }
-        level = min(1, sqrt(sumSquares / Float(samples.count)) * 6)
+        ingest(Array(UnsafeBufferPointer(start: channel, count: Int(out.frameLength))))
+    }
 
-        let chunk = Array(samples)
+    /// Meter, tally, persist, and forward one converted 16 kHz chunk.
+    private func ingest(_ chunk: [Float]) {
+        var sumSquares: Float = 0
+        for s in chunk { sumSquares += s * s }
+        level = min(1, sqrt(sumSquares / Float(chunk.count)) * 6)
+
         lock.lock()
         sampleTally += chunk.count
         if writer == nil {

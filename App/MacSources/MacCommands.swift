@@ -13,9 +13,13 @@ struct MacCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Recording…") {
-                // The person picker is a sheet on the main window.
-                openWindow(id: LuxiconMacApp.mainWindowID)
                 navigation.beginNewRecording(store: store)
+                if navigation.recordingPerson != nil {
+                    openWindow(id: MacRecordView.windowID)
+                } else {
+                    // The person picker is a sheet on the main window.
+                    openWindow(id: LuxiconMacApp.mainWindowID)
+                }
             }
             .keyboardShortcut("n")
         }

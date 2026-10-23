@@ -28,7 +28,7 @@ struct SidebarView: View {
                         items: SessionCatalog.items(for: .person(person.id), store: store, library: library))
                     .tag(SidebarItem.person(person.id))
                     .contextMenu {
-                        Button("New Recording…") { navigation.recordingPerson = person }
+                        Button("New Recording…") { navigation.requestRecording(with: person) }
                         Button("Rename…") {
                             renameText = person.name
                             renaming = person

@@ -112,6 +112,8 @@ struct MacRootView: View {
     @Environment(LibraryIndex.self) private var library
     @Environment(MacNavigation.self) private var navigation
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
+    @State private var showingOnboarding = MacOnboardingView.shouldShow
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -131,6 +133,9 @@ struct MacRootView: View {
             guard let markdown = SessionCatalog.transcriptMarkdown(
                 navigation.session, store: store, library: library) else { return [] }
             return [NSItemProvider(object: markdown as NSString)]
+        }
+        .sheet(isPresented: $showingOnboarding) {
+            MacOnboardingView()
         }
         .sheet(isPresented: $navigation.showingRecordingPicker) {
             RecordingPersonPicker()
@@ -153,6 +158,9 @@ struct MacRootView: View {
             if showing { DebugRecording.log("main window: sleep-stop alert shown") }
         }
         .task { DebugRecording.requestRecordingIfAsked(store: store, navigation: navigation) }
+        .task {
+            if ProcessInfo.processInfo.arguments.contains("-openSettings") { openSettings() }
+        }
         #endif
         .alert("Library Problem", isPresented: Binding(
             get: { store.startupWarning != nil || store.saveError != nil },

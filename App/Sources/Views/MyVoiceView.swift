@@ -21,6 +21,9 @@ struct MyVoiceView: View {
     var body: some View {
         @Bindable var store = store
         Form {
+            #if os(macOS)
+            VoicePrintBanner()
+            #endif
             Section("Your name") {
                 HStack(spacing: 12) {
                     AvatarPicker(fileName: store.myPhotoFileName, name: store.myName) { data in

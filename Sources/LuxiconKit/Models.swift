@@ -115,6 +115,9 @@ public struct SessionSummary: Codable, Sendable, Equatable {
 
 /// A known voice: a person with a stored speaker embedding.
 public struct VoiceEnrollment: Codable, Sendable, Equatable {
+    /// Length of the WeSpeaker speaker embedding.
+    public static let embeddingDimension = 256
+
     public var name: String
     /// 256-dim L2-normalized WeSpeaker embedding.
     public var embedding: [Float]

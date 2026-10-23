@@ -10,10 +10,3 @@ struct MacSettingsView: View {
         .frame(minWidth: 520, idealWidth: 560, minHeight: 640, idealHeight: 720)
     }
 }
-
-/// Placeholder for the Mac's iPhone-sync settings; Task 8 fills it in.
-struct MacSyncSettingsSection: View {
-    var body: some View {
-        Section("iPhone sync") {}
-    }
-}

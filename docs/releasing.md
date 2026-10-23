@@ -2,17 +2,21 @@
 
 How to ship each artifact, exactly which credentials each step uses, and
 where those credentials live. Written for agents working on JD's Mac
-(`W230033`); every flow below was verified working on 2026-07-09.
+(`W230033`); every flow below was verified working on 2026-07-09. Agent
+machines may differ: this repo has also been released from `w270286`, so
+check which credentials actually exist on the machine you are on (the
+inventory below says what to look for) before assuming a flow works.
 
 **This repo is public. Never write credential VALUES into it — only the
 locations and profile names listed here.**
 
-There are two release surfaces:
+There are three release surfaces:
 
 | Artifact | Flow | Auth it uses |
 |---|---|---|
 | iOS app → TestFlight / App Store | `xcodebuild archive` + `-exportArchive` with `destination: upload` | Xcode's logged-in Apple account session |
 | Mac listener installer → GitHub Releases | push a `listener-v*` tag (CI), or `scripts/build-installer.sh` locally | Developer ID certs + notary profile (local) / repo secrets (CI) |
+| Mac app (DMG) → GitHub Releases | `scripts/build-mac-app.sh` locally, then `gh release create mac-v<m>-<b>` | Developer ID Application identity + `luxicon` notary profile |
 
 ---
 
@@ -21,7 +25,7 @@ There are two release surfaces:
 | Credential | Where | Used by | Notes |
 |---|---|---|---|
 | Apple account session (jdmills@davidson.edu, team `4Z539UE4TT`) | Xcode → Settings → Accounts | App Store uploads, `-allowProvisioningUpdates` signing | This is why upload "just works" — do NOT hunt for an API key; none exists on this machine. |
-| "Developer ID Application" identity | login keychain | signs the listener binary | Key ACL already trusts `codesign` — signs non-interactively. |
+| "Developer ID Application" identity | login keychain | signs the listener binary and the Mac app + DMG | Key ACL already trusts `codesign` — signs non-interactively. |
 | "Developer ID Installer" identity | login keychain | signs the installer pkg | Only the Apple **Account Holder** can mint these; JD is not the Account Holder. `.p12` backups of both live in `~/Downloads/Davidson Apple Developer ID {Application,Installer}.p12` (passwords: ask JD — never write them down here). |
 | Notarization credentials | keychain profile named **`luxicon`** (`xcrun notarytool … --keychain-profile luxicon`) | notarizing the installer pkg | Backed by an app-specific password on jdmills@davidson.edu; validated against Apple 2026-07-09. Rotate at appleid.apple.com → update the profile AND the repo secret. |
 | GitHub Actions secrets on `DavidsonCollege/luxicon` | repo → Settings → Secrets | CI listener releases | `AC_APPLE_ID`, `AC_TEAM_ID`, `AC_APP_PASSWORD` (notarization); `DEVELOPER_ID_P12`(+`_PASSWORD`) and `INSTALLER_ID_P12`(+`_PASSWORD`) (signing). Write-only; set with `gh secret set`. |
@@ -157,6 +161,50 @@ a confusing error, so don't submit one.
 one command. Never hand-copy the binary: the macOS firewall keys its Allow
 to the code signature, and ad-hoc rebuilds get silently re-blocked
 (docs/sync.md has the failure-mode table).
+
+---
+
+## Flow 3: Mac app (DMG) → GitHub Releases
+
+```bash
+scripts/build-mac-app.sh
+```
+
+Runs xcodegen, archives the `LuxiconMac` scheme (arm64 only), exports with
+`packaging/mac-export-options.plist`, verifies the signature and the
+`audio-input` entitlement, builds `dist/Luxicon-<marketing>-<build>.dmg`
+(app + Applications symlink), signs the DMG, notarizes (`--wait`), staples,
+and Gatekeeper-checks both the DMG and the app inside it. Expected final
+output: `accepted / source=Notarized Developer ID` for both. Bump
+`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `App/project.yml` first.
+
+Credentials it uses (locations only):
+
+- **"Developer ID Application" identity** in the login keychain. The
+  LuxiconMac target signs it manually (team `4Z539UE4TT`, no provisioning
+  profile), so the Xcode Apple account session is NOT needed for this flow.
+  One-time per Mac, so codesign never prompts: run
+  `security set-key-partition-list -S apple-tool:,apple:,codesign: -s ~/Library/Keychains/login.keychain-db`
+  in Terminal.app (it asks for the login password; agent shells can't pass it).
+- **Notary keychain profile `luxicon`.** If missing, the script fails fast.
+  Create it in Terminal.app (it prompts for an app-specific password; never
+  put it in the repo or a command line an agent sees):
+  `xcrun notarytool store-credentials luxicon --apple-id <account> --team-id 4Z539UE4TT`.
+  Probe: `xcrun notarytool history --keychain-profile luxicon`.
+
+`LUXICON_SKIP_NOTARIZE=1 scripts/build-mac-app.sh` produces a signed but
+NOT notarized DMG for local testing. Never publish that one.
+
+Tag format: `mac-v<marketing>-<build>` (e.g. `mac-v1.0-17`), kept distinct
+from `listener-v*`. Publish manually:
+`gh release create mac-v1.0-17 dist/Luxicon-1.0-17.dmg`.
+
+**Publishing a GitHub release needs JD's explicit go-ahead.** Agents build
+and verify; they do not create the release or push the tag on their own.
+
+If export fails with `Failed to Use Accounts`, see the trap above (that is
+the Xcode account session; unexpected for this flow since signing is manual,
+so stop and report).
 
 ---
 

@@ -11,7 +11,7 @@ servers. The developers receive no data of any kind from the app.
 
 ## What stays on your iPhone
 
-Recordings, transcripts, summaries, your voice fingerprint (a 256-number
+Recordings, transcripts, summaries, your voice fingerprint (a numeric
 embedding, not audio), your people list, and your vocabulary are stored in
 the app's private container on your device. They are protected with iOS
 Data Protection and are included in your standard iPhone backup (encrypted
@@ -28,8 +28,9 @@ by Apple; end-to-end encrypted if you enable Advanced Data Protection).
 - **Mac sync** (optional, off by default): if you pair a Mac, transcripts
   and summaries you choose to push travel over your local network to that
   Mac, encrypted with a key derived from your pairing token. They do not
-  cross the internet. "Send My Voice to Mac" copies only your voice
-  fingerprint (256 numbers, not audio), and only when you tap it.
+  cross the internet. "Send My Voice to Mac" copies a small file with
+  your voice fingerprint (not audio), your display name, and the date it was
+  created, and only when you tap it.
 - **Vocabulary URL sync** (optional, off by default): if you configure a
   vocabulary URL, the app fetches that file over https when opened.
 - **People URL sync** (optional, off by default): if you configure a

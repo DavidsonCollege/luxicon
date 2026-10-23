@@ -25,6 +25,21 @@ xcodebuild -project Luxicon.xcodeproj -scheme Luxicon \
 # ~/Library/Application Support/Luxicon/; Debug builds take `-storePath <dir>`.
 xcodebuild -project Luxicon.xcodeproj -scheme LuxiconMac \
   -destination 'platform=macOS,arch=arm64' -configuration Debug build
+# Add -skipPackagePluginValidation -skipMacroValidation to every xcodebuild call
+# on this machine (package plugins/macros otherwise fail trust validation).
+# Fresh Xcode installs also need the Metal Toolchain once:
+#   xcodebuild -downloadComponent MetalToolchain
+# App/MacSources is Mac-only; App/Sources is shared with iOS, so anything added
+# there must compile for both (or be excluded for LuxiconMac in project.yml).
+
+# One-time per Mac: let codesign use the Developer ID key without a prompt.
+# Run in Terminal.app — a `!`-prefixed shell can't pass the password:
+#   security set-key-partition-list -S apple-tool:,apple:,codesign: -s ~/Library/Keychains/login.keychain-db
+
+# Mac app release: build, Developer-ID sign, DMG, notarize, staple -> dist/Luxicon-<m>-<b>.dmg
+# (LUXICON_SKIP_NOTARIZE=1 for a signed-only local build that must NOT be published).
+# Read docs/releasing.md Flow 3 first.
+scripts/build-mac-app.sh
 
 # Mac sync listener — install ONLY via the script (builds, codesigns, installs to
 # ~/bin, allows through the macOS firewall, restarts the LaunchAgent).

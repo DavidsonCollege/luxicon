@@ -77,7 +77,11 @@ struct TranscriptView: View {
     var body: some View {
         List {
             summarySection
+            #if os(iOS)
+            // Pushing to a Mac is the phone's job; the Mac writes its own
+            // sessions into ~/Luxicon directly.
             macSyncSection
+            #endif
             Section("Talk time") {
                 ForEach(transcript.speakers, id: \.speakerId) { s in
                     HStack {
@@ -109,6 +113,9 @@ struct TranscriptView: View {
                 }
             }
         }
+        #if os(macOS)
+        .readingWidth()
+        #endif
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -299,7 +306,7 @@ struct TranscriptView: View {
 /// markdown is inline-only — newlines collapse to spaces and "- " markers
 /// render as literal text — so lay out paragraphs and bullet rows ourselves
 /// and keep inline markdown (bold) within each block.
-private struct SummaryOverviewText: View {
+struct SummaryOverviewText: View {
     let overview: String
 
     var body: some View {

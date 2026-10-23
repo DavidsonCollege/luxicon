@@ -18,6 +18,16 @@ public struct TranscriptLibrary {
         /// Provenance from the export envelope, when present.
         public var sessionId: UUID? = nil
         public var source: String? = nil
+
+        public init(person: String, transcript: MeetingTranscript, summary: SessionSummary? = nil,
+                    sourceFile: String, sessionId: UUID? = nil, source: String? = nil) {
+            self.person = person
+            self.transcript = transcript
+            self.summary = summary
+            self.sourceFile = sourceFile
+            self.sessionId = sessionId
+            self.source = source
+        }
     }
 
     public var sessions: [Session] = []

@@ -160,6 +160,9 @@ struct MyVoiceView: View {
                 }
             }
 
+            #if os(macOS)
+            MacSyncSettingsSection()
+            #else
             Section {
                 ShareLink(item: URL(string: "https://github.com/DavidsonCollege/luxicon/releases")!) {
                     Label("Send installer link to your Mac", systemImage: "square.and.arrow.up")
@@ -206,6 +209,7 @@ struct MyVoiceView: View {
             } footer: {
                 Text("Send transcripts and summaries to a Mac running `luxicon-mcp listen`, so you can query them from Claude. Everything stays on your local network. Use “Send installer link to your Mac” to AirDrop the listener installer over, then enter the Mac's address if it isn't found automatically (common on enterprise Wi-Fi that blocks discovery). Send My Voice to Mac copies only your voice fingerprint, and only when you tap it.")
             }
+            #endif
 
             Section {
                 Button {
@@ -232,17 +236,20 @@ struct MyVoiceView: View {
             }
 
         }
+        #if os(macOS)
+        .formStyle(.grouped)
+        #endif
         .navigationTitle("My Voice")
         .sheet(isPresented: $showingAboutGiving) {
             AboutGivingView()
         }
         .alert("Microphone Access Is Off", isPresented: $showingMicDeniedAlert) {
-            Button("Open Settings") {
+            Button("Open \(Self.settingsAppName)") {
                 openURL(SystemSettings.microphonePrivacyURL)
             }
             Button("Not Now", role: .cancel) {}
         } message: {
-            Text("Luxicon can't hear you until microphone access is turned on in Settings.")
+            Text("Luxicon can't hear you until microphone access is turned on in \(Self.settingsAppName).")
         }
         .alert("Send My Voice to Mac", isPresented: Binding(
             get: { voiceSendResult != nil },
@@ -260,7 +267,7 @@ struct MyVoiceView: View {
 
     /// Opt-in AI features: summaries, list labels, personal context.
     /// Summaries require Apple Intelligence (iPhone 15 Pro or later on
-    /// iOS 26 or later); on other devices this section states the
+    /// iOS 26 or later; an Apple silicon Mac on macOS 26 or later); on other devices this section states the
     /// requirement — exporting a transcript to any AI assistant is the
     /// designed alternative, not a consolation. When off, all
     /// summary/context UI in the app is hidden.
@@ -307,20 +314,31 @@ struct MyVoiceView: View {
         }
     }
 
+    /// Device words for the AI copy. iOS keeps its original "phone" wording.
+    #if os(macOS)
+    private static let deviceWord = DeviceNoun.current
+    private static let osName = "macOS"
+    private static let settingsAppName = "System Settings"
+    #else
+    private static let deviceWord = "phone"
+    private static let osName = "iOS"
+    private static let settingsAppName = "Settings"
+    #endif
+
     private var footerText: String {
         var parts: [String] = []
         if store.aiSummariesEnabled {
             parts.append("Each 1-on-1 gets a summary and a one-line topic label, "
                 + "informed by the background notes you keep about yourself and each "
                 + "person. Powered by Apple Intelligence — everything runs on this "
-                + "phone, and turning it off keeps existing summaries.")
+                + "\(Self.deviceWord), and turning it off keeps existing summaries.")
             if ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 27 {
                 parts.append("Long meetings are summarized in sections and "
-                    + "stitched together. iOS 27 summarizes longer meetings in one pass.")
+                    + "stitched together. \(Self.osName) 27 summarizes longer meetings in one pass.")
             }
         } else if AppleIntelligence.status == .available {
-            parts.append("Summarize each 1-on-1 on this phone, using your background "
-                + "notes about people to interpret them — nothing leaves the phone. "
+            parts.append("Summarize each 1-on-1 on this \(Self.deviceWord), using your background "
+                + "notes about people to interpret them — nothing leaves the \(Self.deviceWord). "
                 + "Uses Apple Intelligence; no download.")
         } else {
             parts.append("You can always export a transcript and summarize it "
@@ -336,11 +354,15 @@ struct MyVoiceView: View {
         case .available:
             return ""  // Not shown: the section renders the enable flow instead.
         case .osTooOld:
-            return "Summaries require Apple Intelligence, which needs iOS 26 or later."
+            return "Summaries require Apple Intelligence, which needs \(Self.osName) 26 or later."
         case .deviceNotEligible:
+            #if os(macOS)
+            return "Summaries require Apple Intelligence, which needs a Mac with Apple silicon."
+            #else
             return "Summaries require Apple Intelligence, which needs an iPhone 15 Pro or later."
+            #endif
         case .notEnabled:
-            return "Summaries require Apple Intelligence — turn it on in Settings → Apple Intelligence & Siri."
+            return "Summaries require Apple Intelligence — turn it on in \(Self.settingsAppName) → Apple Intelligence & Siri."
         case .modelNotReady:
             return "Summaries require Apple Intelligence, which is still preparing on this \(DeviceNoun.current) — check back shortly."
         }

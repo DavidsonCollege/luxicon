@@ -26,9 +26,11 @@ struct SessionRow: View {
             case .processing:
                 ProgressView()
             case .ready:
+                #if os(iOS)
                 if !store.syncToken.isEmpty {
                     syncBadge
                 }
+                #endif
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
             case .failed:
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)

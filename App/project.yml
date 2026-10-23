@@ -120,6 +120,8 @@ targets:
           - Views/RecordSheetView.swift
       - MacSources
       - Assets.xcassets
+      # Mac-only catalog: the shared one's AppIcon is a single iOS 1024.
+      - MacAssets.xcassets
       - Resources
     dependencies:
       - package: Luxicon
@@ -144,6 +146,7 @@ targets:
         MACOSX_DEPLOYMENT_TARGET: "15.0"
         ARCHS: arm64
         ENABLE_HARDENED_RUNTIME: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIconMac
         # Developer ID (direct distribution, no provisioning profile) for
         # every configuration, so local builds carry the same signature
         # shape as the notarized release.

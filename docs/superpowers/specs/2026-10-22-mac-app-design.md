@@ -171,8 +171,19 @@ The MCP server and library scan therefore ignore the file.
   mid-recording (AirPods connect, USB mic unplugged) with
   `AVAudioEngineConfigurationChange`: restart on the new default device
   and keep writing to the same file, as the iOS interruption path does.
-- The record window shows which input device is in use. A device picker is
-  out of scope for v1.
+- The record window's "Input" line is a microphone picker listing every
+  connected input device. It shows the device actually being captured
+  (`kAudioOutputUnitProperty_CurrentDevice`), remembers the pick by UID
+  (`macInputDeviceUID`), and falls back to the system default with a one-line
+  note when the saved or captured device is missing. Switching mid-recording
+  keeps the same file and session. (Added after v1 planning, JD 2026-10-23.)
+- Muting the mic takes the recording off the record (capture stopped, the
+  muted off-record screen) until it's unmuted. Two signals are watched: the
+  system input mute (AirPods stem press, `AVAudioApplication`) and the
+  captured device's own mute flag (`kAudioDevicePropertyMute`). A manual "Go
+  off the record" is never ended by unmuting; a recording that starts muted
+  starts off the record; Resume is disabled while muted. The state logic is
+  `OffRecordState` in LuxiconKit.
 - Keep the Mac awake while recording and processing:
   `ProcessInfo.beginActivity(options: [.idleSystemSleepDisabled, .userInitiated])`,
   replacing the iOS `isIdleTimerDisabled` use in `SessionProcessing.swift`.

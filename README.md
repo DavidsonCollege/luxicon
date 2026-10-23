@@ -66,6 +66,10 @@ the same `~/Luxicon` library the phone pushes into and the MCP server reads.
   the phone does.)
 - **Voice print:** import the voice print you enrolled on your iPhone (My Voice
   → Mac sync → Send My Voice to Mac) so the Mac labels you automatically.
+- **Microphone:** pick the input in the recording window; Luxicon remembers it
+  and switches mid-recording without stopping.
+- **Mute = off the record:** muting your mic (AirPods stem press, a USB mic's
+  mute button) pauses the recording; unmuting resumes it.
 - **Privacy:** same posture as the phone app. Audio and transcripts stay on
   the Mac; the only network traffic is the model downloads and the opt-in
   features described below.

@@ -27,13 +27,16 @@ struct MacRecordView: View {
     }
 }
 
-/// One recording with one person, on the Mac's default input device.
+/// One recording with one person, on the microphone picked in the window
+/// (remembered; the system default until one is picked).
 ///
 /// Mirrors the iPhone's record sheet: audio streams to disk as it's captured
 /// (a crash is recovered into a session on next launch), live captions are a
 /// best-effort preview, and Stop & Transcribe starts the full pipeline. If
 /// the Mac goes to sleep, the recording stops and is saved; processing
-/// starts on wake (`MacNavigation.handleWake`).
+/// starts on wake (`MacNavigation.handleWake`). Muting the mic (AirPods
+/// stem, a USB mic's mute button) takes the recording off the record until
+/// it's unmuted (`RecordingInputController`).
 private struct MacRecordingSession: View {
     @Environment(Store.self) private var store
     @Environment(MacNavigation.self) private var navigation
@@ -46,7 +49,7 @@ private struct MacRecordingSession: View {
     @State private var recorder = Recorder()
     @State private var captioner = LiveCaptioner()
     @State private var closeGuard = WindowCloseGuard()
-    @State private var inputName: String?
+    @State private var input = RecordingInputController()
     @State private var startError: String?
     @State private var microphoneDenied = false
     @State private var began = false
@@ -55,7 +58,8 @@ private struct MacRecordingSession: View {
     @State private var finished = false
     @State private var confirmingDiscard = false
     @State private var confirmingClose = false
-    @State private var isOffRecord = false
+
+    private var isOffRecord: Bool { input.isOffRecord }
 
     var body: some View {
         // Recorder is not Observable; the TimelineView re-evaluates the
@@ -78,11 +82,11 @@ private struct MacRecordingSession: View {
                     .accessibilityHidden(isOffRecord)
 
                 VStack(spacing: 6) {
+                    // Its own view, so the timeline's ticks don't rebuild
+                    // the menu.
+                    InputPickerRow(input: input)
                     // Decorative icons: VoiceOver reads just the text (the
                     // hand symbol would otherwise be announced as "Block").
-                    Label("Input: \(inputName ?? "No input device")", systemImage: "mic")
-                        .font(.callout)
-                        .labelStyle(DecorativeIconLabelStyle())
                     Label("Make sure \(person.name) knows this conversation is being recorded.",
                           systemImage: "hand.raised")
                         .font(.footnote)
@@ -95,7 +99,9 @@ private struct MacRecordingSession: View {
                 }
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
-                .accessibilityHidden(isOffRecord)
+                // Not `.accessibilityHidden(isOffRecord)`: hidden(false) on
+                // the container would re-expose the decorative icons inside.
+                .accessibilityHiddenWhen(isOffRecord)
 
                 statusMessages
                     .accessibilityHidden(isOffRecord)
@@ -143,10 +149,17 @@ private struct MacRecordingSession: View {
             Text("The audio cannot be recovered.")
         }
         .overlay {
-            if isOffRecord {
-                OffRecordView(personName: person.name, pausedAt: recorder.duration, onResume: resumeRecording)
-                    .transition(.opacity)
+            ZStack {
+                if isOffRecord {
+                    OffRecordView(personName: person.name, pausedAt: recorder.duration,
+                                  isMuted: input.offRecord.mode == .offRecord(reason: .muted),
+                                  onResume: resumeRecording)
+                        .transition(.opacity)
+                }
             }
+            // Mute and unmute arrive outside any user action: animate on
+            // the state itself, whatever changed it.
+            .animation(.easeInOut(duration: 0.3), value: isOffRecord)
         }
         // On the overlay's host so it doesn't collide with the discard dialog.
         .background {
@@ -166,21 +179,16 @@ private struct MacRecordingSession: View {
         .onAppear(perform: begin)
         .onDisappear(perform: cleanUp)
         .task {
-            // The default input can change mid-recording (AirPods connect,
-            // a USB mic is unplugged); the Recorder follows it.
+            // The captured device can change under us (the default changes,
+            // Core Audio reroutes); the picker shows the real one.
             while !Task.isCancelled {
-                let name = AudioInputName.current()
-                if name != inputName {
-                    inputName = name
-                    #if DEBUG
-                    DebugRecording.log("input device: \(name ?? "none")")
-                    #endif
-                }
-                try? await Task.sleep(for: .seconds(1))
+                input.refresh()
+                try? await Task.sleep(for: .milliseconds(500))
             }
         }
         #if DEBUG
         .task { await DebugRecording.runHooks(recorder: recorder, closeGuard: closeGuard, stop: { stopAndSave() }) }
+        .task { await DebugRecording.runInputHooks(input: input, recorder: recorder) }
         #endif
     }
 
@@ -269,7 +277,7 @@ private struct MacRecordingSession: View {
     private func begin() {
         guard !began else { return }
         began = true
-        inputName = AudioInputName.current()
+        input.prepare()
         closeGuard.shouldClose = {
             // Closing mid-recording asks first; otherwise close freely.
             guard recorder.isRecording, !saving, !finished else { return true }
@@ -281,7 +289,7 @@ private struct MacRecordingSession: View {
             return false
         }
         #if DEBUG
-        DebugRecording.log("window open for \(person.name); input device: \(inputName ?? "none")")
+        DebugRecording.log("window open for \(person.name); input device: \(input.currentDevice?.name ?? "none")")
         if DebugRecording.noMicrophone {
             DebugRecording.log("-noMicrophone: not starting the microphone")
             return
@@ -315,7 +323,8 @@ private struct MacRecordingSession: View {
                 #if DEBUG
                 recorder.simulatedInput = simulatedInput
                 #endif
-                try recorder.start(writingTo: fileURL)
+                // Starts off the record if the mic is already muted.
+                try input.start(recorder: recorder, writingTo: fileURL)
                 store.setRecordingActive(true)
                 #if DEBUG
                 DebugRecording.log("recording \(sessionId)\(simulatedInput == nil ? "" : " (simulated input)")")
@@ -325,6 +334,7 @@ private struct MacRecordingSession: View {
                 captioner.start()
                 #endif
             } catch {
+                input.stop()
                 startError = "Could not start recording: \(error.localizedDescription)"
             }
         }
@@ -361,19 +371,17 @@ private struct MacRecordingSession: View {
     }
 
     private func goOffRecord() {
-        recorder.pause()
-        withAnimation(.easeInOut(duration: 0.3)) { isOffRecord = true }
+        input.goOffRecord()
     }
 
+    /// A failed resume leaves the recorder paused (with runtimeError set),
+    /// and the off-record screen stays up rather than a live-looking one.
     private func resumeRecording() {
-        recorder.resume()
-        // A failed resume leaves the recorder paused (with runtimeError set):
-        // keep the off-record screen up rather than a live-looking one.
-        guard !recorder.isPaused else { return }
-        withAnimation(.easeInOut(duration: 0.3)) { isOffRecord = false }
+        input.resume()
     }
 
     private func discard() {
+        input.stop()
         _ = recorder.stop()
         captioner.reset()
         store.discardRecording(id: sessionId)
@@ -392,6 +400,7 @@ private struct MacRecordingSession: View {
         // Duration comes from the tally: file-backed recordings don't keep
         // samples in memory, so stop() returns [] here.
         let duration = recorder.duration
+        input.stop()
         _ = recorder.stop()
         captioner.stop()
         if dueToSleep, duration < 1 {
@@ -472,12 +481,60 @@ private struct MacRecordingSession: View {
             finished = true
         }
         captioner.reset()
+        input.stop()
         recorder.onSystemSleep = nil
         store.setRecordingActive(false)
         closeGuard.detach()
         if navigation.recordingPerson?.id == person.id {
             navigation.recordingPerson = nil
         }
+    }
+}
+
+/// "Input: [Microphone ▾]", plus a one-line note when the saved or captured
+/// microphone went missing.
+private struct InputPickerRow: View {
+    let input: RecordingInputController
+
+    var body: some View {
+        VStack(spacing: 4) {
+            if input.deviceList.devices.isEmpty {
+                Label("Input: No input device", systemImage: "mic")
+                    .labelStyle(DecorativeIconLabelStyle())
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: "mic").accessibilityHidden(true)
+                    Text("Input:").accessibilityHidden(true)
+                    Picker("Microphone", selection: selection) {
+                        if input.currentDevice == nil {
+                            Text("Choose a Microphone").tag(input.currentDeviceID ?? 0)
+                        }
+                        ForEach(input.deviceList.devices) { device in
+                            Text(device.name).tag(device.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    .help("The microphone this recording captures from. Switching keeps recording.")
+                }
+            }
+            if let note = input.deviceNote {
+                Label(note, systemImage: "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                    .labelStyle(DecorativeIconLabelStyle())
+            }
+        }
+        .font(.callout)
+    }
+
+    private var selection: Binding<AudioDeviceID> {
+        Binding(
+            get: { input.currentDeviceID ?? 0 },
+            set: { id in
+                if let device = input.deviceList.device(id: id) { input.select(device) }
+            })
     }
 }
 
@@ -555,6 +612,19 @@ private struct WindowAccessor: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if let window { onWindow?(window) }
+        }
+    }
+}
+
+private extension View {
+    /// Hidden from VoiceOver while `hidden`; otherwise untouched, so the
+    /// children's own `accessibilityHidden(true)` still applies.
+    @ViewBuilder
+    func accessibilityHiddenWhen(_ hidden: Bool) -> some View {
+        if hidden {
+            accessibilityHidden(true)
+        } else {
+            self
         }
     }
 }

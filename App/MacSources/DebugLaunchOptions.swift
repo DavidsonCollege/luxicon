@@ -33,7 +33,8 @@ import LuxiconKit
 ///   window; for `onboarding`, the main window under the sheet) to stdout.
 ///
 /// Recording hooks (`-recordWith`, `-noMicrophone`, `-simulate…`,
-/// `-answerPromptWith`) are documented on `DebugRecording`; `-openSettings`
+/// `-answerPromptWith`, and the picker/mute hooks `-simulateMuteAt`,
+/// `-selectInputNamed`, …) are documented on `DebugRecording`; `-openSettings`
 /// and `-autoUseVoicePrint` drive Settings and the voice-print banner.
 enum DebugLaunchOptions {
     /// Every flag that takes values, with its value count. Anything else
@@ -46,6 +47,9 @@ enum DebugLaunchOptions {
         "-recordWith": 1, "-simulateMicrophone": 1, "-answerPromptWith": 1,
         "-simulateSleepAfter": 1, "-simulateCloseAfter": 1, "-simulateStopAfter": 1,
         "-simulateQuitAfter": 1, "-simulatePermissionDelay": 1,
+        "-simulateMuteAt": 1, "-simulateUnmuteAt": 1, "-simulateMuteSource": 1, "-simulateStartMuted": 1,
+        "-simulateManualOffAt": 1, "-simulateManualResumeAt": 1, "-selectInputNamed": 2,
+        "-simulateInputGoneAt": 1,
     ]
 
     /// Flag → its values (empty for a valueless flag).

@@ -5,9 +5,14 @@ import LuxiconKit
 /// ignores the system appearance) so the shift from the recording screen is
 /// unmistakable, with 1-on-1 confidentiality imagery. Capture is already stopped
 /// by the time this is shown; the only action is `onResume`.
+///
+/// `isMuted` (Mac only; the iPhone never sets it): off the record because the
+/// microphone is muted. The copy says so, and Resume is disabled — unmuting
+/// resumes the recording.
 struct OffRecordView: View {
     let personName: String
     let pausedAt: TimeInterval
+    var isMuted = false
     let onResume: () -> Void
 
     // Fixed palette — deliberately not semantic colors (see doc comment).
@@ -35,7 +40,7 @@ struct OffRecordView: View {
                     Image(systemName: "person.fill")
                         .font(.system(size: 52))
                         .foregroundStyle(Self.accent)
-                    Image(systemName: "lock.fill")
+                    Image(systemName: isMuted ? "mic.slash.fill" : "lock.fill")
                         .font(.system(size: 26))
                         .foregroundStyle(Self.dim)
                     Image(systemName: "person.fill")
@@ -44,11 +49,20 @@ struct OffRecordView: View {
                 }
                 .accessibilityHidden(true)
 
-                Text("OFF THE RECORD")
-                    .font(.caption.weight(.semibold))
-                    .tracking(2)
-                    .foregroundStyle(Self.accent)
-                    .padding(.top, 28)
+                if isMuted {
+                    Text("MICROPHONE MUTED — OFF THE RECORD")
+                        .font(.caption.weight(.semibold))
+                        .tracking(2)
+                        .foregroundStyle(Self.accent)
+                        .padding(.top, 28)
+                        .accessibilityLabel("Microphone muted. Off the record.")
+                } else {
+                    Text("OFF THE RECORD")
+                        .font(.caption.weight(.semibold))
+                        .tracking(2)
+                        .foregroundStyle(Self.accent)
+                        .padding(.top, 28)
+                }
 
                 Text("This stays between you and \(personName).")
                     .font(.title2.weight(.semibold))
@@ -57,29 +71,72 @@ struct OffRecordView: View {
                     .padding(.top, 8)
                     .padding(.horizontal, 32)
 
-                Text("No audio is being recorded or saved.\nPaused at \(TranscriptExport.timestamp(pausedAt))")
-                    .font(.subheadline)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(Self.subtext)
-                    .padding(.top, 14)
+                if isMuted {
+                    Text("No audio is being recorded or saved.\nUnmute to resume recording. Paused at \(TranscriptExport.timestamp(pausedAt))")
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(Self.subtext)
+                        .padding(.top, 14)
+                        .padding(.horizontal, 32)
+                } else {
+                    Text("No audio is being recorded or saved.\nPaused at \(TranscriptExport.timestamp(pausedAt))")
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(Self.subtext)
+                        .padding(.top, 14)
+                }
 
                 Spacer()
 
-                Button(action: onResume) {
-                    Label("Resume recording", systemImage: "record.circle")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                if isMuted {
+                    // Resuming a muted mic would only record silence. A
+                    // disabled prominent button all but vanishes on this
+                    // background, so it's drawn as a readable outline.
+                    Button(action: onResume) {
+                        Label("Unmute your microphone to resume", systemImage: "mic.slash")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(WaitingForUnmuteButtonStyle())
+                    .disabled(true)
+                    .accessibilityHint("Recording resumes when you unmute.")
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 28)
+                } else {
+                    Button(action: onResume) {
+                        Label("Resume recording", systemImage: "record.circle")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Self.resumeFill)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 28)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Self.resumeFill)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 28)
             }
+        }
+    }
+}
+
+extension OffRecordView {
+    /// The muted overlay's disabled Resume: an outline with legible text.
+    private struct WaitingForUnmuteButtonStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .foregroundStyle(OffRecordView.heading.opacity(0.8))
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(OffRecordView.dim, lineWidth: 1))
         }
     }
 }
 
 #Preview {
     OffRecordView(personName: "Priya", pausedAt: 252, onResume: {})
+}
+
+#Preview("Muted") {
+    OffRecordView(personName: "Priya", pausedAt: 252, isMuted: true, onResume: {})
 }

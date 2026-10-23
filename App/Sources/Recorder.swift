@@ -69,6 +69,10 @@ final class Recorder: @unchecked Sendable {
     /// microphone, so the record flow can be exercised without mic access.
     var simulatedInput: [Float]?
     private var simulatedTimer: DispatchSourceTimer?
+    #if os(macOS)
+    /// The device a simulated recording "captures from" (nil: the default).
+    private var simulatedInputDeviceID: AudioDeviceID?
+    #endif
     #endif
     private(set) var isRecording = false
     /// True while another audio session (phone call, Siri) holds the mic.
@@ -129,6 +133,15 @@ final class Recorder: @unchecked Sendable {
         try session.setActive(true)
         #endif
 
+        try prepareWriter(for: fileURL)
+        try startEngine()
+        isRecording = true
+        isInterrupted = false
+        installObservers()
+    }
+
+    /// Fresh tally, buffer, and (for a file-backed recording) writer.
+    private func prepareWriter(for fileURL: URL?) throws {
         // Create the writer before taking the lock: a throw while the lock is
         // held would deadlock every UI poll of `duration`.
         let newWriter = try fileURL.map { try WAVFileWriter(url: $0, sampleRate: Self.sampleRate) }
@@ -139,12 +152,70 @@ final class Recorder: @unchecked Sendable {
         self.fileURL = fileURL
         runtimeErrorStorage = nil
         lock.unlock()
+    }
 
-        try startEngine()
+    #if os(macOS)
+    /// Start a file-backed recording already off the record (the mic was
+    /// muted when it began): the file exists and the recording can be
+    /// stopped and saved as usual, but nothing is captured until `resume()`.
+    func startOffRecord(writingTo fileURL: URL) throws {
+        guard !isRecording else { return }
+        try prepareWriter(for: fileURL)
         isRecording = true
         isInterrupted = false
+        isPaused = true
         installObservers()
     }
+
+    /// Capture from `id` instead of the current input device. Mid-recording
+    /// the switch is seamless — the tap is rewired with the new device's
+    /// format, and the same file, tally, and session carry on. Off the
+    /// record (or before `start`) it takes effect when capture next starts.
+    /// Throws only if Core Audio refuses the device; a failed restart is
+    /// reported via `runtimeError` and retried like any lost capture.
+    func setInputDevice(_ id: AudioDeviceID) throws {
+        // Capture should be flowing (not stopped, not off the record); it may
+        // already have died with the old device, which the restart recovers.
+        let shouldCapture = isRecording && !isPaused
+        if shouldCapture && isCapturing { stopEngine() }
+        #if DEBUG
+        if simulatedInput != nil {
+            simulatedInputDeviceID = id
+            if shouldCapture { resumeCapture() }
+            return
+        }
+        #endif
+        guard let unit = engine.inputNode.audioUnit else {
+            if shouldCapture { resumeCapture() }
+            throw RecorderError.microphoneUnavailable
+        }
+        var device = id
+        let status = AudioUnitSetProperty(
+            unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+            &device, UInt32(MemoryLayout<AudioDeviceID>.size))
+        // Restart either way: on failure, the previous device carries on.
+        // (No-op while capture is already running.)
+        if shouldCapture { resumeCapture() }
+        guard status == noErr else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+        }
+    }
+
+    /// The device capture is actually bound to (the input unit's current
+    /// device), which needn't be the system default. Nil before `start`.
+    var currentInputDeviceID: AudioDeviceID? {
+        #if DEBUG
+        if simulatedInput != nil { return simulatedInputDeviceID }
+        #endif
+        guard isRecording, let unit = engine.inputNode.audioUnit else { return nil }
+        var device = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioUnitGetProperty(
+            unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &device, &size) == noErr,
+              device != 0 else { return nil }
+        return device
+    }
+    #endif
 
     /// Stop, finalize the on-disk file (if any), and return the in-memory
     /// samples (enrollment recordings only; file-backed recordings return []).

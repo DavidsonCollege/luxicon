@@ -31,7 +31,29 @@ import LuxiconKit
 ///   window is closed right after it opens.
 ///
 /// Timed hooks count recorded seconds, which hold still after a stop, so
-/// a hook with the same time as a stop fires right after it.
+/// a hook with the same time as a stop fires right after it. With
+/// `-timedHooksUseWallClock` they count wall-clock seconds since the
+/// recording started instead, so they can fire while off the record.
+///
+/// Microphone picker and mute hooks count WALL-CLOCK seconds since the
+/// recording started (recorded seconds stand still while off the record):
+///
+/// - `-simulateMuteAt <s>` / `-simulateUnmuteAt <s>`: mute / unmute the
+///   source(s) named by `-simulateMuteSource system|device|both` (default
+///   `system`). The system source goes through the real API
+///   (`AVAudioApplication.setInputMuted` → the registered handler); the
+///   device source is injected where the device's mute flag would report.
+/// - `-simulateStartMuted system|device|both`: those sources are muted
+///   before the recording starts.
+/// - `-simulateManualOffAt <s>` / `-simulateManualResumeAt <s>`: the
+///   "Go Off the Record" button / the overlay's Resume.
+/// - `-selectInputNamed <name> <s>`: pick that input device in the picker.
+/// - `-simulateInputGoneAt <s>`: treat the captured device as unplugged.
+///
+/// With any of these, a once-a-second `[record] tick` line logs the wall
+/// time, recorded duration, off-record state, and captured device. The
+/// picked microphone is saved next to the scratch store
+/// (`debug-input-device.plist`), never in the real app's defaults.
 ///
 /// Progress is logged to stderr with a `[record]` prefix.
 @MainActor
@@ -49,6 +71,22 @@ enum DebugRecording {
     }
 
     static var noMicrophone: Bool { DebugLaunchOptions.has("-noMicrophone") }
+
+    private static func muteSources(_ raw: String?) -> [OffRecordState.MuteSource] {
+        switch raw {
+        case nil: return []
+        case "both": return [.system, .device]
+        case let raw?:
+            if let source = OffRecordState.MuteSource(rawValue: raw) { return [source] }
+            log("unknown mute source \(raw); expected system, device, or both")
+            return []
+        }
+    }
+
+    /// `-simulateStartMuted`: sources muted before the recording starts.
+    static var startMutedSources: [OffRecordState.MuteSource] {
+        muteSources(value(after: "-simulateStartMuted"))
+    }
 
     static func simulatedInput() -> [Float]? {
         guard let path = value(after: "-simulateMicrophone") else { return nil }
@@ -160,10 +198,113 @@ enum DebugRecording {
         pending = pending.enumerated()
             .sorted { ($0.element.after, $0.offset) < ($1.element.after, $1.offset) }
             .map(\.element)
+        let wallClock = DebugLaunchOptions.has("-timedHooksUseWallClock")
+        var startedAt: ContinuousClock.Instant?
         while !pending.isEmpty, !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(200))
-            guard recorder.duration > 0, recorder.duration >= pending[0].after else { continue }
+            if wallClock {
+                if startedAt == nil, recorder.isRecording { startedAt = .now }
+                guard let startedAt else { continue }
+                let elapsed = ContinuousClock.now - startedAt
+                guard Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+                        >= pending[0].after else { continue }
+            } else {
+                guard recorder.duration > 0, recorder.duration >= pending[0].after else { continue }
+            }
             pending.removeFirst().run()
+        }
+    }
+
+    private static let inputHookFlags = [
+        "-simulateMuteAt", "-simulateUnmuteAt", "-simulateStartMuted", "-simulateManualOffAt",
+        "-simulateManualResumeAt", "-selectInputNamed", "-simulateInputGoneAt",
+    ]
+
+    /// The picker and mute hooks, timed in wall-clock seconds from the
+    /// start of the recording.
+    static func runInputHooks(input: RecordingInputController, recorder: Recorder) async {
+        guard inputHookFlags.contains(where: DebugLaunchOptions.has) else { return }
+        for device in input.deviceList.devices {
+            log("input device \(device.id) \(device.name) uid=\(device.uid) "
+                + "muteProperty=\(AudioInputDevices.hasInputMute(device.id))")
+        }
+        while !recorder.isRecording, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        let start = ContinuousClock.now
+        func elapsed() -> Double {
+            let d = ContinuousClock.now - start
+            return Double(d.components.seconds) + Double(d.components.attoseconds) / 1e18
+        }
+        let sources = muteSources(value(after: "-simulateMuteSource") ?? "system")
+        var pending: [(at: Double, run: () -> Void)] = []
+        if let at = seconds(after: "-simulateMuteAt") {
+            pending.append((at, {
+                log("simulating mute (\(sources.map(\.rawValue).joined(separator: "+")))")
+                sources.forEach { input.debugSimulateMute($0, muted: true) }
+            }))
+        }
+        if let at = seconds(after: "-simulateUnmuteAt") {
+            pending.append((at, {
+                log("simulating unmute (\(sources.map(\.rawValue).joined(separator: "+")))")
+                sources.forEach { input.debugSimulateMute($0, muted: false) }
+            }))
+        }
+        if let at = seconds(after: "-simulateManualOffAt") {
+            pending.append((at, {
+                log("simulating Go Off the Record")
+                input.goOffRecord()
+            }))
+        }
+        if let at = seconds(after: "-simulateManualResumeAt") {
+            pending.append((at, {
+                log("simulating Resume (enabled: \(input.offRecord.canManuallyResume))")
+                // The button is disabled while muted; a click can't land.
+                if input.offRecord.canManuallyResume || input.offRecord.shouldCapture { input.resume() }
+            }))
+        }
+        if let args = DebugLaunchOptions.values("-selectInputNamed"), let at = Double(args[1]) {
+            let name = args[0]
+            pending.append((at, {
+                if let device = input.deviceList.devices.first(where: {
+                    $0.name.caseInsensitiveCompare(name) == .orderedSame
+                }) {
+                    log("simulating picking \(device.name)")
+                    input.select(device)
+                } else {
+                    log("selectInputNamed: no input device named \(name)")
+                }
+            }))
+        }
+        if let at = seconds(after: "-simulateInputGoneAt") {
+            pending.append((at, {
+                log("simulating the captured device disconnecting")
+                input.debugDisconnectCurrent()
+            }))
+        }
+        pending = pending.enumerated()
+            .sorted { ($0.element.at, $0.offset) < ($1.element.at, $1.offset) }
+            .map(\.element)
+        var nextTick = 0.0
+        while recorder.isRecording, !Task.isCancelled {
+            let now = elapsed()
+            while let first = pending.first, now >= first.at {
+                pending.removeFirst().run()
+            }
+            if now >= nextTick {
+                nextTick += 1
+                let mode: String = switch input.offRecord.mode {
+                case .recording: "recording"
+                case .offRecord(reason: .manual): "off(manual)"
+                case .offRecord(reason: .muted): "off(muted)"
+                }
+                log("tick wall=\(String(format: "%.1f", now)) duration=\(String(format: "%.1f", recorder.duration)) "
+                    + "state=\(mode) overlay=\(input.isOffRecord) paused=\(recorder.isPaused) "
+                    + "resumeEnabled=\(input.offRecord.canManuallyResume) "
+                    + "device=\(input.currentDevice?.name ?? "none")"
+                    + (input.deviceNote.map { " note=\"\($0)\"" } ?? ""))
+            }
+            try? await Task.sleep(for: .milliseconds(100))
         }
     }
 }

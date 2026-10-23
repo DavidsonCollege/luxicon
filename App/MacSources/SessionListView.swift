@@ -15,7 +15,7 @@ struct SessionItem: Identifiable {
     var id: SessionRef {
         switch kind {
         case .mac(let record): .mac(record.id)
-        case .library(let session, _): .library(sourceFile: session.sourceFile)
+        case .library(let session, _): .library(sourceFile: session.libraryKey)
         }
     }
 
@@ -85,9 +85,10 @@ enum SessionCatalog {
         return items.sorted { $0.date > $1.date }
     }
 
-    static func librarySession(_ sourceFile: String, library: LibraryIndex) -> TranscriptLibrary.Session? {
-        library.phoneSessions.first { $0.sourceFile == sourceFile }
-            ?? library.orphanMacSessions.first { $0.sourceFile == sourceFile }
+    /// Look up a library session by its `libraryKey`.
+    static func librarySession(_ key: String, library: LibraryIndex) -> TranscriptLibrary.Session? {
+        library.phoneSessions.first { $0.libraryKey == key }
+            ?? library.orphanMacSessions.first { $0.libraryKey == key }
     }
 
     private static func content(_ ref: SessionRef?, store: Store, library: LibraryIndex)

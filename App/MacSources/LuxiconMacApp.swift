@@ -16,6 +16,9 @@ struct LuxiconMacApp: App {
                 .environment(appDelegate.navigation)
         }
         .defaultSize(width: 1200, height: 800)
+        // Open on every launch, even when the last session ended with the
+        // window closed (restoration would otherwise bring back zero windows).
+        .defaultLaunchBehavior(.presented)
         .commands {
             MacCommands(store: appDelegate.store, library: appDelegate.library,
                         navigation: appDelegate.navigation)
@@ -60,6 +63,13 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         if !store.loadPending {
             Task { await library.reload(ownedIds: ownedIds) }
         }
+    }
+
+    /// Closing the main window doesn't quit: the app keeps watching
+    /// ~/Luxicon (and a recording window can outlive it). The Dock icon,
+    /// ⌘N, and ⌘F bring the window back.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
     }
 
     private var ownedIds: Set<UUID> { Set(store.sessions.map(\.id)) }

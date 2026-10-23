@@ -15,6 +15,8 @@ enum SidebarItem: Hashable {
 /// file in ~/Luxicon (phone push, or a Mac file whose record is gone).
 enum SessionRef: Hashable {
     case mac(UUID)
+    /// `sourceFile` carries the session's `libraryKey` (relative path, plus
+    /// `#n` inside a bundle), which is unique; a bare file name is not.
     case library(sourceFile: String)
 }
 
@@ -110,10 +112,10 @@ struct MacRootView: View {
         case .mac(let id):
             SessionDetailView(sessionId: id)
                 .id(id)
-        case .library(let sourceFile):
-            if let session = SessionCatalog.librarySession(sourceFile, library: library) {
+        case .library(let key):
+            if let session = SessionCatalog.librarySession(key, library: library) {
                 LibrarySessionDetailView(session: session)
-                    .id(sourceFile)
+                    .id(key)
             } else {
                 ContentUnavailableView("Session Not Found", systemImage: "doc.questionmark",
                                        description: Text("It is no longer in ~/Luxicon."))

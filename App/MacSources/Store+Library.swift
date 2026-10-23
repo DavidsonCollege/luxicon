@@ -91,8 +91,10 @@ extension Store {
     /// orphan). Ownership-gated like every other removal: the file must say
     /// `"source": "mac"` with the session's own id.
     func deleteOrphanLibraryFile(_ session: TranscriptLibrary.Session) {
-        guard session.source == TranscriptExport.macSource, let id = session.sessionId else { return }
-        let url = LibraryLocation.url.appendingPathComponent(session.sourceFile)
+        guard session.source == TranscriptExport.macSource, let id = session.sessionId,
+              session.bundleIndex == nil else { return }
+        // relativePath reaches files in subfolders too; isOwned still gates it.
+        let url = LibraryLocation.url.appendingPathComponent(session.relativePath)
         if Self.isOwned(url, by: id) {
             try? FileManager.default.removeItem(at: url)
         }

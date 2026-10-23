@@ -18,15 +18,29 @@ public struct TranscriptLibrary {
         /// Provenance from the export envelope, when present.
         public var sessionId: UUID? = nil
         public var source: String? = nil
+        /// The file's path relative to the library folder ("Sam/a.json"
+        /// for a subfolder); `sourceFile` when loaded some other way.
+        public var relativePath: String
+        /// Position within a per-person bundle file; nil for single-session files.
+        public var bundleIndex: Int? = nil
+
+        /// Unique within one loaded library: the relative path, plus
+        /// `#<index>` for each session of a bundle file.
+        public var libraryKey: String {
+            bundleIndex.map { "\(relativePath)#\($0)" } ?? relativePath
+        }
 
         public init(person: String, transcript: MeetingTranscript, summary: SessionSummary? = nil,
-                    sourceFile: String, sessionId: UUID? = nil, source: String? = nil) {
+                    sourceFile: String, sessionId: UUID? = nil, source: String? = nil,
+                    relativePath: String? = nil, bundleIndex: Int? = nil) {
             self.person = person
             self.transcript = transcript
             self.summary = summary
             self.sourceFile = sourceFile
             self.sessionId = sessionId
             self.source = source
+            self.relativePath = relativePath ?? sourceFile
+            self.bundleIndex = bundleIndex
         }
     }
 
@@ -48,21 +62,28 @@ public struct TranscriptLibrary {
             .compactMap { $0 as? URL } ?? [])
             .filter { $0.pathExtension.lowercased() == "json" }
 
+        let base = directory.resolvingSymlinksInPath().standardizedFileURL.pathComponents
         for file in files {
             guard let data = try? Data(contentsOf: file) else { continue }
+            let components = file.resolvingSymlinksInPath().standardizedFileURL.pathComponents
+            let relativePath = components.starts(with: base) && components.count > base.count
+                ? components.dropFirst(base.count).joined(separator: "/")
+                : file.lastPathComponent
             library.sessions.append(contentsOf: parse(
                 data,
                 sourceFile: file.lastPathComponent,
                 folderName: file.deletingLastPathComponent().lastPathComponent == directory.lastPathComponent
                     ? nil
-                    : file.deletingLastPathComponent().lastPathComponent
+                    : file.deletingLastPathComponent().lastPathComponent,
+                relativePath: relativePath
             ))
         }
         library.sessions.sort { $0.transcript.date < $1.transcript.date }
         return library
     }
 
-    static func parse(_ data: Data, sourceFile: String, folderName: String?) -> [Session] {
+    static func parse(_ data: Data, sourceFile: String, folderName: String?,
+                      relativePath: String? = nil) -> [Session] {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
@@ -94,19 +115,22 @@ public struct TranscriptLibrary {
         }
 
         if let bundle = try? decoder.decode(BundleEnvelope.self, from: data) {
-            return bundle.transcripts.map {
-                Session(person: bundle.personName, transcript: $0, summary: nil, sourceFile: sourceFile)
+            return bundle.transcripts.enumerated().map { index, transcript in
+                Session(person: bundle.personName, transcript: transcript, summary: nil,
+                        sourceFile: sourceFile, relativePath: relativePath, bundleIndex: index)
             }
         }
         if let envelope = try? decoder.decode(SessionEnvelope.self, from: data) {
             let t = envelope.transcript
             return [Session(person: personName(for: t, folderName: folderName),
                             transcript: t, summary: envelope.summary, sourceFile: sourceFile,
-                            sessionId: envelope.sessionId, source: envelope.source)]
+                            sessionId: envelope.sessionId, source: envelope.source,
+                            relativePath: relativePath)]
         }
         if let transcript = try? decoder.decode(MeetingTranscript.self, from: data) {
             return [Session(person: personName(for: transcript, folderName: folderName),
-                            transcript: transcript, summary: nil, sourceFile: sourceFile)]
+                            transcript: transcript, summary: nil, sourceFile: sourceFile,
+                            relativePath: relativePath)]
         }
         return []
     }

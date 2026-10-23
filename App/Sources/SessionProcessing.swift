@@ -76,7 +76,12 @@ extension Store {
                     engine: engine
                 ) { fraction, stage in
                     Task { @MainActor in
-                        self.processing.bySession[sessionId] = .init(fraction: fraction, stage: stage)
+                        // A callback queued just before completion can land
+                        // after it; re-inserting then would leave a stale
+                        // entry (and, on the Mac, a held idle-sleep assertion).
+                        if self.processing.tasks[sessionId] != nil {
+                            self.processing.bySession[sessionId] = .init(fraction: fraction, stage: stage)
+                        }
                         #if os(iOS)
                         if #available(iOS 26.0, *) {
                             ContinuedProcessing.shared.report(

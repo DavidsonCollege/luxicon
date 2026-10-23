@@ -14,6 +14,12 @@ enum DebugSeed {
         let args = ProcessInfo.processInfo.arguments
         guard !didRun, let i = args.firstIndex(of: "-seedSessionFromWAV"), i + 2 < args.count else { return }
         didRun = true
+        // Seeding writes a session (and its library file): only ever into
+        // scratch locations, never the real store or ~/Luxicon.
+        guard args.contains("-libraryPath"), args.contains("-storePath") else {
+            print("[seed] refused: -seedSessionFromWAV needs both -libraryPath and -storePath")
+            return
+        }
         let wavURL = URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath)
         let name = args[i + 2]
 

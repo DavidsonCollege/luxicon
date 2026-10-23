@@ -22,6 +22,8 @@ extension Store {
         guard session.status == .ready, let transcript = session.transcript else { return }
 
         let dir = LibraryLocation.url
+        // The folder may have been removed while the app was running.
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let data: Data
         do {
             data = try TranscriptExport.json(
@@ -73,15 +75,47 @@ extension Store {
     func deleteLibraryFile(for session: SessionRecord) {
         let stored = sessions.first { $0.id == session.id } ?? session
         let dir = LibraryLocation.url
-        // The recorded name, plus the names it would have used, in case the
+        // The recorded name, plus every name it could have used, in case the
         // record never got to store it (e.g. a save failed after the write).
-        var names = Self.libraryCandidates(base: libraryBaseFilename(for: stored)).prefix(2).map { $0 }
+        var names = Self.libraryCandidates(base: libraryBaseFilename(for: stored))
         if let recorded = stored.libraryFileName { names.insert(recorded, at: 0) }
         for name in Set(names) {
             let url = dir.appendingPathComponent(name)
             if Self.isOwned(url, by: stored.id) {
                 try? FileManager.default.removeItem(at: url)
             }
+        }
+    }
+
+    /// Remove a Mac-recorded library file whose store record is gone (an
+    /// orphan). Ownership-gated like every other removal: the file must say
+    /// `"source": "mac"` with the session's own id.
+    func deleteOrphanLibraryFile(_ session: TranscriptLibrary.Session) {
+        guard session.source == TranscriptExport.macSource, let id = session.sessionId else { return }
+        let url = LibraryLocation.url.appendingPathComponent(session.sourceFile)
+        if Self.isOwned(url, by: id) {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    /// Rename a person and move their finished sessions' library files to
+    /// the new name right away. Session titles that follow the default
+    /// "1-on-1 with <name>" pattern follow the rename, since the library
+    /// (and MCP) attribute sessions by that title.
+    func renamePerson(id: UUID, to newName: String) {
+        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, let p = people.firstIndex(where: { $0.id == id }) else { return }
+        let oldName = people[p].name
+        guard name != oldName else { return }
+        people[p].name = name
+        let oldTitle = "1-on-1 with \(oldName)", newTitle = "1-on-1 with \(name)"
+        for i in sessions.indices where sessions[i].personId == id {
+            if sessions[i].title == oldTitle { sessions[i].title = newTitle }
+            if sessions[i].transcript?.title == oldTitle { sessions[i].transcript?.title = newTitle }
+        }
+        save()
+        for session in sessions where session.personId == id && session.status == .ready {
+            writeLibraryFile(for: session)
         }
     }
 

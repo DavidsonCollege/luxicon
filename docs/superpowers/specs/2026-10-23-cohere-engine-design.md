@@ -70,8 +70,8 @@ switch, so it can be validated before anyone adopts it.
      it's used and needs about 4 GB of memory while transcribing."
    - The download happens on first use, with progress through the existing
      `ensureLoaded` stage text ("Downloading Cohere model… NN%").
-   - Parakeet stays the default. Live captions are unchanged (streaming
-     Parakeet EOU).
+   - The automatic default is unchanged (see settled call 3). Live captions
+     are unchanged (streaming Parakeet EOU).
 6. **Short-turn guard (Cohere only).**
    - For turns under 1.0 s, if Cohere returns one of a small set of stock
      closers ("Thank you.", "Thanks.", "Bye."), keep it only when another
@@ -88,6 +88,57 @@ switch, so it can be validated before anyone adopts it.
    - `--diarizer`
 
    These support future A/B work.
+
+## Calls settled after the builder check (2026-10-23, controller)
+
+These are my calls; JD can override any of them.
+
+1. **What gets vendored.** In v0.0.28, `SegmentationModel`, `DiarizationHelpers`,
+   `PowersetDecoder` and the pipeline initializer are internal to SpeechVAD.
+   - **Vendor:** the classic pipeline plus whatever internal pieces it needs
+     (segmentation model with SincNet, BiLSTM and weight loading; the
+     constrained-agglomerative helpers; soft powerset decoding). Copy them from
+     revision `e403d0b` into `Sources/LuxiconKit/ClassicDiarization/`. Prefix or
+     namespace the types so they can't collide with SpeechVAD's.
+   - **Don't fork:** no fork or patched local copy of speech-swift. A fork is a
+     second repo to maintain.
+   - **Same models:** the same weights from the same Hugging Face repos
+     (`aufklarer/Pyannote-Segmentation-MLX`, `aufklarer/WeSpeaker-ResNet34-LM-MLX`).
+     Use the public `WeSpeakerModel` where it's public.
+   - **License:** add the Apache-2.0 headers and an attribution section to
+     `THIRD-PARTY-NOTICES.md`.
+2. **Meaning of "same transcript out."**
+   - **Diarization:** must match today's, with frame agreement ≥ 99.5% and the
+     same speaker counts.
+   - **Parakeet:** text may change only where upstream fixed a bug. Known case:
+     digit tokens used to be dropped and are now kept.
+   - **Before/after check:** capture a baseline before the bump (a `main`
+     worktree at `e403d0b`, in scratch) and compare Parakeet's per-turn text on
+     the Meeting A and Meeting B recordings. Every difference must be explained. Same
+     comparison for streaming EOU captions on a 2-minute excerpt.
+   - **iPhone:** the gate is the iOS Release build plus JD's device checklist.
+     There is no app test bundle.
+3. **Defaults don't change.** The Settings picker keeps its current entries
+   (Automatic, Apple, Luxicon/Parakeet) and gains "Cohere Transcribe — best
+   quality (Mac only)". Automatic still resolves to Apple Speech on macOS 26+
+   and Parakeet below. Read decision 5 above with "the automatic default stays
+   the default".
+4. **Enum shape.** `ASREngine.cohere` exists on all platforms, because the enum
+   is shared Codable state.
+   - Engine resolution treats `.cohere` as unavailable on iOS, so a persisted
+     `cohere` choice on iOS resolves to `resolvedDefault()`.
+   - Any engine-picker UI on iOS never lists it.
+   - The existing unknown-value fallback stays as it is.
+5. **Short-turn guard.** Don't load a second ASR model. For turns under 1.0 s,
+   if Cohere's output is exactly a stock closer ("Thank you.", "Thanks.",
+   "Thank you very much.", "Bye."), treat the turn as empty.
+   - Keep the guard list small and in LuxiconKit, with tests.
+   - The method switch applies to luxicon-cli and the Mac app only. The MCP
+     server and listener never diarize.
+6. **Recordings and baseline.** Use `<Meeting A recording, local only>`
+   and `<Meeting B recording, local only>` (read-only). Build the
+   baseline in a scratch worktree of `main`; never switch branches in the main
+   checkout.
 
 ## Non-goals
 - Cohere on iPhone.

@@ -8,6 +8,7 @@ actor PipelineService {
 
     private var pipeline: MeetingPipeline?
     private var loadedEngine: ASREngine?
+    private var loadedDiarization: DiarizationMethod?
     private var isLoading = false
 
     func ensureLoaded(
@@ -20,13 +21,14 @@ actor PipelineService {
         while isLoading {
             try await Task.sleep(nanoseconds: 100_000_000)
         }
-        if let pipeline, loadedEngine == engine { return pipeline }
+        let diarization = Self.currentDiarizationMethod()
+        if let pipeline, loadedEngine == engine, loadedDiarization == diarization { return pipeline }
         isLoading = true
         defer { isLoading = false }
         pipeline = nil  // release the old engine's memory before loading anew
         let loaded: MeetingPipeline
         do {
-            loaded = try await MeetingPipeline.load(engine: engine, progress: progress)
+            loaded = try await MeetingPipeline.load(engine: engine, diarization: diarization, progress: progress)
         } catch where engine == .appleSpeech && !(error is CancellationError) && !Task.isCancelled {
             // System transcriber unavailable (locale/asset) — never block a
             // meeting on it. Cache under the requested key so we don't retry
@@ -35,11 +37,28 @@ actor PipelineService {
             // away, not failing, and we must not silently downgrade the
             // cached engine for the rest of the app run.
             progress?(0, "System transcription unavailable — using built-in engine")
-            loaded = try await MeetingPipeline.load(engine: .parakeet, progress: progress)
+            loaded = try await MeetingPipeline.load(engine: .parakeet, diarization: diarization, progress: progress)
         }
         pipeline = loaded
         loadedEngine = engine
+        loadedDiarization = diarization
         return loaded
+    }
+
+    /// Diarization method for new loads. iOS is always `.default` (classic).
+    /// On macOS a hidden `UserDefaults` key opts into v2 for validation:
+    /// `diarizationMethod` = "classic" | "v2", optional `diarizationThreshold`
+    /// (Double). Unknown values fall back to the default.
+    static func currentDiarizationMethod() -> DiarizationMethod {
+        #if os(macOS)
+        let defaults = UserDefaults.standard
+        guard let name = defaults.string(forKey: "diarizationMethod") else { return .default }
+        let threshold = defaults.object(forKey: "diarizationThreshold") != nil
+            ? Float(defaults.double(forKey: "diarizationThreshold")) : nil
+        return DiarizationMethod(cliValue: name, threshold: threshold) ?? .default
+        #else
+        return .default
+        #endif
     }
 
     /// Diarize + transcribe a recording.

@@ -35,6 +35,8 @@ struct LuxiconCLI {
               --engine parakeet|appleSpeech ASR engine (Parakeet TDT or Apple SpeechTranscriber)
               --save-diarization f.json write the diarization result (A/B: share turns across runs)
               --load-diarization f.json reuse a saved diarization instead of diarizing
+              --diarizer classic|v2     diarization pipeline (default classic; v2 is opt-in, validation only)
+              --cluster-threshold <f>   v2 clustering threshold (default 0.4; lower = fewer merges)
               --diarize-only            stop after diarization (needs --save-diarization)
               --turn-log f.jsonl        write one {start,end,speakerId,text} JSON line per turn
             """)
@@ -177,6 +179,8 @@ struct LuxiconCLI {
         var saveDiarization: String?
         var loadDiarization: String?
         var diarizeOnly = false
+        var diarizerName = "classic"
+        var clusterThreshold: Float?
         var turnLogPath: String?
 
         func value(after flag: String, at i: Int) throws -> String {
@@ -218,14 +222,22 @@ struct LuxiconCLI {
             case "--load-diarization": loadDiarization = try value(after: args[i], at: i); i += 2
             case "--turn-log": turnLogPath = try value(after: args[i], at: i); i += 2
             case "--diarize-only": diarizeOnly = true; i += 1
+            case "--diarizer": diarizerName = try value(after: args[i], at: i); i += 2
+            case "--cluster-threshold":
+                let raw = try value(after: args[i], at: i)
+                guard let f = Float(raw) else { throw ValidationError("--cluster-threshold expects a number, got '\(raw)'") }
+                clusterThreshold = f; i += 2
             default: throw ValidationError("unknown option \(args[i])")
             }
         }
 
+        guard let diarization = DiarizationMethod(cliValue: diarizerName, threshold: clusterThreshold) else {
+            throw ValidationError("--diarizer expects classic or v2")
+        }
         let sr = MeetingPipeline.sampleRate
         if diarizeOnly {
             guard let saveDiarization else { throw ValidationError("--diarize-only needs --save-diarization") }
-            let diarizer = try await MeetingPipeline.loadDiarizer()
+            let diarizer = try await MeetingPipeline.loadDiarizer(method: diarization)
             let audio = try AudioFileLoader.load(url: URL(fileURLWithPath: audioPath), targetSampleRate: sr)
             let t0 = Date()
             let result = MeetingPipeline.diarizeOnly(diarizer, audio: audio)
@@ -240,7 +252,7 @@ struct LuxiconCLI {
         }
 
         print("Loading models (downloads on first run, engine: \(engine.rawValue))...")
-        let pipeline = try await MeetingPipeline.load(engine: engine) { p, stage in
+        let pipeline = try await MeetingPipeline.load(engine: engine, diarization: diarization) { p, stage in
             print(String(format: "  [%3.0f%%] %@", p * 100, stage))
         }
 

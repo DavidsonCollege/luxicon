@@ -129,9 +129,10 @@ public final class MeetingPipeline {
     /// Download (first run) and load both models.
     public static func load(
         engine: ASREngine = .parakeet,
+        diarization: DiarizationMethod = .default,
         progress: (@Sendable (Double, String) -> Void)? = nil
     ) async throws -> MeetingPipeline {
-        let diarizer = try await loadDiarizer { p, stage in
+        let diarizer = try await loadDiarizer(method: diarization) { p, stage in
             progress?(p * 0.5, stage)
         }
         let asr: any TurnTranscriber
@@ -155,9 +156,15 @@ public final class MeetingPipeline {
     /// Download (first run) and load the diarizer `load` uses. The CLI's
     /// --diarize-only goes through here too, so it can't diverge from the app.
     public static func loadDiarizer(
+        method: DiarizationMethod = .default,
         progress: (@Sendable (Double, String) -> Void)? = nil
     ) async throws -> any SpeakerDiarizer {
-        try await ClassicDiarizationPipeline.load(progress: progress)
+        switch method {
+        case .classic:
+            return try await ClassicDiarizationPipeline.load(progress: progress)
+        case .pyannoteV2(let threshold):
+            return try await PyannoteV2Diarizer.load(threshold: threshold, progress: progress)
+        }
     }
 
     /// Extract a speaker embedding from ~10s of one person talking.

@@ -80,7 +80,7 @@ public struct TranscriptionEmptyError: Error, LocalizedError {
 /// All inference is synchronous and CPU/GPU/ANE-bound; call `process` from a
 /// background task. The class is not thread-safe — use one instance per task.
 public final class MeetingPipeline {
-    public let diarizer: PyannoteDiarizationPipeline
+    public let diarizer: any SpeakerDiarizer
     public let asr: any TurnTranscriber
 
     /// Sample rate `process` expects. Load or record audio at this rate.
@@ -121,7 +121,7 @@ public final class MeetingPipeline {
         public static let oneOnOne = Options()
     }
 
-    public init(diarizer: PyannoteDiarizationPipeline, asr: any TurnTranscriber) {
+    public init(diarizer: any SpeakerDiarizer, asr: any TurnTranscriber) {
         self.diarizer = diarizer
         self.asr = asr
     }
@@ -131,9 +131,9 @@ public final class MeetingPipeline {
         engine: ASREngine = .parakeet,
         progress: (@Sendable (Double, String) -> Void)? = nil
     ) async throws -> MeetingPipeline {
-        let diarizer = try await DiarizationPipeline.fromPretrained(progressHandler: { p, stage in
+        let diarizer = try await loadDiarizer { p, stage in
             progress?(p * 0.5, stage)
-        })
+        }
         let asr: any TurnTranscriber
         switch engine {
         case .parakeet:
@@ -150,6 +150,14 @@ public final class MeetingPipeline {
             }
         }
         return MeetingPipeline(diarizer: diarizer, asr: asr)
+    }
+
+    /// Download (first run) and load the diarizer `load` uses. The CLI's
+    /// --diarize-only goes through here too, so it can't diverge from the app.
+    public static func loadDiarizer(
+        progress: (@Sendable (Double, String) -> Void)? = nil
+    ) async throws -> any SpeakerDiarizer {
+        try await ClassicDiarizationPipeline.load(progress: progress)
     }
 
     /// Extract a speaker embedding from ~10s of one person talking.
@@ -360,7 +368,7 @@ public final class MeetingPipeline {
     /// Diarize + cap exactly as `process` does (same MLX cache bound), for the
     /// CLI's --diarize-only.
     public static func diarizeOnly(
-        _ diarizer: PyannoteDiarizationPipeline, audio: [Float], options: Options = .oneOnOne
+        _ diarizer: any SpeakerDiarizer, audio: [Float], options: Options = .oneOnOne
     ) -> DiarizationResult {
         MLX.Memory.cacheLimit = min(MLX.Memory.cacheLimit, gpuCacheLimit)
         defer { MLX.Memory.clearCache() }

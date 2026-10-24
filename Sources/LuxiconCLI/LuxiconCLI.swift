@@ -92,7 +92,7 @@ struct LuxiconCLI {
                         throw ValidationError("--chunk-chars expects a positive integer")
                     }
                     chunkChars = n
-            default: throw ValidationError("unknown option \(args[j])")
+                default: throw ValidationError("unknown option \(args[j])")
                 }
                 j += 2
             }
@@ -214,7 +214,7 @@ struct LuxiconCLI {
                 }
                 engine = parsed
                 i += 2
-                case "--save-diarization": saveDiarization = try value(after: args[i], at: i); i += 2
+            case "--save-diarization": saveDiarization = try value(after: args[i], at: i); i += 2
             case "--load-diarization": loadDiarization = try value(after: args[i], at: i); i += 2
             case "--turn-log": turnLogPath = try value(after: args[i], at: i); i += 2
             case "--diarize-only": diarizeOnly = true; i += 1
@@ -225,7 +225,7 @@ struct LuxiconCLI {
         let sr = MeetingPipeline.sampleRate
         if diarizeOnly {
             guard let saveDiarization else { throw ValidationError("--diarize-only needs --save-diarization") }
-            let diarizer = try await DiarizationPipeline.fromPretrained()
+            let diarizer = try await MeetingPipeline.loadDiarizer()
             let audio = try AudioFileLoader.load(url: URL(fileURLWithPath: audioPath), targetSampleRate: sr)
             let t0 = Date()
             let result = MeetingPipeline.diarizeOnly(diarizer, audio: audio)

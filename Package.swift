@@ -32,6 +32,8 @@ let package = Package(
                 .product(name: "ParakeetStreamingASR", package: "speech-swift"),
                 .product(name: "AudioCommon", package: "speech-swift"),
                 .product(name: "MLX", package: "mlx-swift"),
+                // The vendored classic diarizer (ClassicDiarization/) defines MLXNN modules.
+                .product(name: "MLXNN", package: "mlx-swift"),
             ]
         ),
         .executableTarget(

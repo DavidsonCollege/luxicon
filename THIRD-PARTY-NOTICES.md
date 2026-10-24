@@ -1117,6 +1117,20 @@ This product contains code from swift-nio-extras.
 - Copyright (c) 2020 YaoYuan <ibireme@gmail.com>
 - <https://github.com/ibireme/yyjson>
 
+## Vendored source
+
+### speech-swift (Apache-2.0)
+
+`Sources/LuxiconKit/ClassicDiarization/` contains source files copied from
+speech-swift at commit e403d0bdd5e1 (the classic pyannote diarization
+pipeline) and modified by Luxicon: types renamed with a `Classic` prefix and
+unused code paths removed. Each file's header names its upstream source and
+the changes made.
+
+- License: Apache-2.0
+- Copyright 2025 Ivan Digital
+- <https://github.com/soniqo/speech-swift>
+
 ## License texts
 
 Full text of each license above, reproduced once per license type.

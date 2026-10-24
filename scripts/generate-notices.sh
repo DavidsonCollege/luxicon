@@ -124,6 +124,24 @@ for e in entries:
     if e["notice"]:
         out += ["Upstream NOTICE file:", "", "```",
                 e["notice"].rstrip(), "```", ""]
+# Source files copied into this repo (not a package dependency, so not in
+# Package.resolved). Keep in sync with the per-file headers.
+out += [
+    "## Vendored source",
+    "",
+    "### speech-swift (Apache-2.0)",
+    "",
+    "`Sources/LuxiconKit/ClassicDiarization/` contains source files copied from",
+    "speech-swift at commit e403d0bdd5e1 (the classic pyannote diarization",
+    "pipeline) and modified by Luxicon: types renamed with a `Classic` prefix and",
+    "unused code paths removed. Each file's header names its upstream source and",
+    "the changes made.",
+    "",
+    "- License: Apache-2.0",
+    "- Copyright 2025 Ivan Digital",
+    "- <https://github.com/soniqo/speech-swift>",
+    "",
+]
 out += [
     "## License texts",
     "",

@@ -79,6 +79,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
             await library.reload(ownedIds: ownedIds)
             #if DEBUG
             DebugLaunchOptions.seedIfRequested(store: store)
+            DebugLaunchOptions.retryFailedIfRequested(store: store)
             DebugLaunchOptions.deletePersonIfRequested(store: store)
             #endif
         }

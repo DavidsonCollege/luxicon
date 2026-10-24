@@ -42,9 +42,17 @@ struct SessionDetailView: View {
                 Text(info?.stage ?? "Working…")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                #if os(macOS)
+                Text(store.asrEngine == .cohere
+                     ? "First use of Cohere Transcribe downloads a 1.6 GB model."
+                     : "First run may download speech models (up to ~700 MB).")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                #else
                 Text("First run may download speech models (up to ~700 MB).")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+                #endif
             }
         case .failed:
             ContentUnavailableView {

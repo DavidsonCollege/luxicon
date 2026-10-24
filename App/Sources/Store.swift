@@ -86,7 +86,9 @@ final class Store {
     /// Explicit engine choice from settings; nil means automatic
     /// (Apple's system transcriber on iOS 26+, else Parakeet).
     var asrEngineChoice: ASREngine?
-    var asrEngine: ASREngine { asrEngineChoice ?? .resolvedDefault() }
+    /// The engine to run: the choice when this platform supports it, else the
+    /// automatic default (a `cohere` choice read on iOS must not fail a session).
+    var asrEngine: ASREngine { ASREngine.resolved(asrEngineChoice) }
     /// Master switch for the AI features (summaries, list labels, personal
     /// context). Off by default: enabling attaches to the Apple Intelligence
     /// system model (OS-managed, no download). When off, the summary and

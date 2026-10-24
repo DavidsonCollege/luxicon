@@ -121,4 +121,23 @@ import SpeechVAD
         #expect(turns.isEmpty)
         #expect(records.map(\.text) == [""])
     }
+
+    // MARK: Load stage text
+
+    #if os(macOS)
+    /// Download progress carries a percentage; once the bytes are on disk the
+    /// weights load for seconds with no callbacks, so the text drops the
+    /// percentage instead of sitting at "100%".
+    @Test func cohereLoadStageTextIsTruthful() {
+        #expect(CohereTurnTranscriber.loadStage(fraction: 0, downloading: true)
+            == "Downloading Cohere model… 0%")
+        #expect(CohereTurnTranscriber.loadStage(fraction: 0.426, downloading: true)
+            == "Downloading Cohere model… 42%")
+        // 99.9% is not done: never round up to a "100%" that then stalls.
+        #expect(CohereTurnTranscriber.loadStage(fraction: 0.999, downloading: true)
+            == "Downloading Cohere model… 99%")
+        #expect(CohereTurnTranscriber.loadStage(fraction: 1, downloading: false)
+            == "Loading Cohere model…")
+    }
+    #endif
 }

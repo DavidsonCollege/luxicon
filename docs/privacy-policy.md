@@ -1,6 +1,7 @@
 # Luxicon privacy policy
 
-*Effective 2026-07-14; Mac section added 2026-10-23.*
+*Effective 2026-07-14; Mac section added 2026-10-23; Cohere Transcribe
+download added 2026-10-24.*
 
 Luxicon is built so that your conversations stay yours.
 
@@ -45,6 +46,11 @@ the same way the iPhone app does.
   Apple's built-in engine off or unavailable, a transcription model is
   fetched from Hugging Face instead). No user data is sent — these are file
   downloads.
+- **Cohere Transcribe model download** (optional, Mac only, off by default):
+  Cohere Transcribe (Mac only) downloads a 1.6 GB model from Hugging Face
+  when you choose it in Settings → Transcription. Like the other speech
+  models, it is a file download — no user data is sent — and transcription
+  with it runs entirely on the Mac.
 - **Mac sync** (optional, off by default): if you pair a Mac, transcripts
   and summaries you choose to push travel over your local network to that
   Mac, encrypted with a key derived from your pairing token. They do not

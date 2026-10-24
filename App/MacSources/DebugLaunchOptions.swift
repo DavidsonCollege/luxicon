@@ -1,6 +1,7 @@
 #if DEBUG
 import AppKit
 import AVFoundation
+import os
 import SwiftUI
 import LuxiconKit
 
@@ -21,6 +22,16 @@ import LuxiconKit
 ///   (created if needed), run through the real pipeline.
 /// - `-deletePersonNamed <name>`: once the library has loaded, delete that
 ///   person through `Store.deletePerson`, the sidebar's Delete… action.
+/// - `-asrEngine <raw>`: the Settings → Transcription choice (`ASREngine`
+///   raw value: `parakeet`, `appleSpeech`, `cohere`; `automatic` clears it).
+///
+/// Failure injection:
+/// - `-simulateModelDownloadFailure`: the next Cohere model load throws
+///   what URLSession throws offline (`URLError.notConnectedToInternet`);
+///   later loads in the same run proceed, so Retry recovers.
+/// - `-retryFailedSessions`: once the library has loaded, press Retry on
+///   every failed session (`Store.startProcessing`, the button's action).
+///   Scratch locations only.
 ///
 /// Screens (for `scripts/mac-screenshots.sh`):
 /// - `-route sidebar:all | sidebar:vocabulary | person:<uuid> | library:<name>
@@ -42,7 +53,7 @@ enum DebugLaunchOptions {
     private static let valueCounts: [String: Int] = [
         "-libraryPath": 1, "-storePath": 1,
         "-importPeople": 1, "-importVocabulary": 1, "-importPhotos": 1, "-myName": 1,
-        "-seedSessionFromWAV": 2, "-deletePersonNamed": 1,
+        "-seedSessionFromWAV": 2, "-deletePersonNamed": 1, "-asrEngine": 1,
         "-route": 1, "-windowSize": 1, "-appearance": 1,
         "-recordWith": 1, "-simulateMicrophone": 1, "-simulateCaptions": 1, "-answerPromptWith": 1,
         "-simulateSleepAfter": 1, "-simulateCloseAfter": 1, "-simulateStopAfter": 1,
@@ -135,9 +146,22 @@ enum DebugLaunchOptions {
         importFixtures(store: store)
     }
 
+    /// `-simulateModelDownloadFailure` fires once per run.
+    private static let simulatedFailure = OSAllocatedUnfairLock(initialState: has("-simulateModelDownloadFailure"))
+
+    /// True exactly once when `-simulateModelDownloadFailure` is set: the
+    /// caller fails that model load as an offline download would.
+    static func consumeSimulatedModelDownloadFailure() -> Bool {
+        simulatedFailure.withLock { pending in
+            defer { pending = false }
+            if pending { log("simulating Cohere model download failure") }
+            return pending
+        }
+    }
+
     @MainActor
     private static func importFixtures(store: Store) {
-        let flags = ["-myName", "-importPeople", "-importVocabulary", "-importPhotos"]
+        let flags = ["-myName", "-importPeople", "-importVocabulary", "-importPhotos", "-asrEngine"]
         guard flags.contains(where: has) else { return }
         // Imports write store.json: only ever a scratch store.
         guard has("-storePath") else {
@@ -147,6 +171,17 @@ enum DebugLaunchOptions {
         if let name = value("-myName") {
             store.myName = name
             store.save()
+        }
+        if let raw = value("-asrEngine") {
+            if raw == "automatic" {
+                store.asrEngineChoice = nil
+            } else if let engine = ASREngine(rawValue: raw) {
+                store.asrEngineChoice = engine
+            } else {
+                log("unknown -asrEngine \(raw)")
+            }
+            store.save()
+            log("asrEngine choice: \(store.asrEngineChoice?.rawValue ?? "automatic") → runs \(store.asrEngine.rawValue)")
         }
         if let url = path("-importPeople") {
             do {
@@ -210,6 +245,20 @@ enum DebugLaunchOptions {
         let count = store.sessions(for: person).count
         store.deletePerson(person)
         log("deletePersonNamed: deleted \(name) and \(count) session(s)")
+    }
+
+    /// `-retryFailedSessions`: what each failed session's Retry button does.
+    @MainActor
+    static func retryFailedIfRequested(store: Store) {
+        guard has("-retryFailedSessions") else { return }
+        guard has("-libraryPath"), has("-storePath") else {
+            log("refused: -retryFailedSessions needs both -libraryPath and -storePath")
+            return
+        }
+        for session in store.sessions where session.status == .failed {
+            log("retrying failed session \(session.id)")
+            store.startProcessing(session)
+        }
     }
 
     /// `-seedSessionFromWAV <wav> <name>`: turn a WAV into a recorded

@@ -26,10 +26,37 @@ public final class CohereTurnTranscriber: TurnTranscriber {
         language: String = "en",
         progress: (@Sendable (Double, String) -> Void)? = nil
     ) async throws -> CohereTurnTranscriber {
+        // The downloader reports bytes only; loading the weights afterwards
+        // takes seconds with no callbacks, so the stage text must say so
+        // rather than sit at "100%". Concurrent ranged chunks can also report
+        // out of order — show the high-water mark.
+        let highWater = HighWaterMark()
+        progress?(0, loadStage(fraction: 0, downloading: false))
         let model = try await CohereTranscribeModel.load(modelId) { p in
-            progress?(p, "Loading Cohere Transcribe")
+            let shown = highWater.raise(to: p)
+            progress?(shown, loadStage(fraction: shown, downloading: shown < 1))
         }
         return CohereTurnTranscriber(model: model, language: language)
+    }
+
+    /// Stage text for a load: "Downloading Cohere model… NN%" while bytes
+    /// arrive, then "Loading Cohere model…" (no percentage) while the
+    /// weights load from disk.
+    static func loadStage(fraction: Double, downloading: Bool) -> String {
+        guard downloading else { return "Loading Cohere model…" }
+        let percent = Int((min(max(fraction, 0), 1) * 100).rounded(.down))
+        return "Downloading Cohere model… \(percent)%"
+    }
+
+    /// Monotonic max of reported fractions, safe across callback threads.
+    private final class HighWaterMark: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = 0.0
+        func raise(to fraction: Double) -> Double {
+            lock.lock(); defer { lock.unlock() }
+            value = max(value, fraction)
+            return value
+        }
     }
 
     public var supportsContext: Bool { false }

@@ -1,5 +1,8 @@
 import Foundation
 import LuxiconKit
+#if os(macOS)
+import os
+#endif
 
 /// Owns the (non-Sendable) models and serializes all inference.
 /// Models load lazily on first use and stay resident (~700 MB download on first run).
@@ -21,14 +24,34 @@ actor PipelineService {
         while isLoading {
             try await Task.sleep(nanoseconds: 100_000_000)
         }
+        // Never load an engine this platform can't run (a persisted `cohere`
+        // choice read on iOS) — fall back to the automatic default instead.
+        let engine = ASREngine.resolved(engine)
         let diarization = Self.currentDiarizationMethod()
         if let pipeline, loadedEngine == engine, loadedDiarization == diarization { return pipeline }
         isLoading = true
         defer { isLoading = false }
         pipeline = nil  // release the old engine's memory before loading anew
         let loaded: MeetingPipeline
+        #if os(macOS)
+        Self.log.notice("Loading models: engine=\(engine.rawValue, privacy: .public), diarization=\(String(describing: diarization), privacy: .public)")
+        let progress = Self.loggingStageChanges(progress)
+        #endif
         do {
+            #if os(macOS) && DEBUG
+            if engine == .cohere, DebugLaunchOptions.consumeSimulatedModelDownloadFailure() {
+                // What URLSession surfaces with no network.
+                throw URLError(.notConnectedToInternet, userInfo: [
+                    NSLocalizedDescriptionKey: "The Internet connection appears to be offline.",
+                ])
+            }
+            #endif
             loaded = try await MeetingPipeline.load(engine: engine, diarization: diarization, progress: progress)
+        } catch where engine == .cohere && !(error is CancellationError) && !Task.isCancelled {
+            // The 1.6 GB first-use download is the likeliest failure (offline,
+            // disk full). Say what failed and how to recover rather than a
+            // raw error dump; the session stays .failed with Retry.
+            throw CohereLoadError(underlying: error)
         } catch where engine == .appleSpeech && !(error is CancellationError) && !Task.isCancelled {
             // System transcriber unavailable (locale/asset) — never block a
             // meeting on it. Cache under the requested key so we don't retry
@@ -44,6 +67,32 @@ actor PipelineService {
         loadedDiarization = diarization
         return loaded
     }
+
+    #if os(macOS)
+    private static let log = Logger(subsystem: "edu.davidson.luxicon.mac", category: "pipeline")
+
+    /// DEBUG: echo each distinct load stage to stderr, so a stuck or
+    /// misleading stage ("… 100%" while weights load) shows in a test run.
+    private static func loggingStageChanges(
+        _ progress: (@Sendable (Double, String) -> Void)?
+    ) -> (@Sendable (Double, String) -> Void)? {
+        #if DEBUG
+        let last = OSAllocatedUnfairLock(initialState: "")
+        return { fraction, stage in
+            let changed = last.withLock { previous in
+                defer { previous = stage }
+                return previous != stage
+            }
+            if changed {
+                FileHandle.standardError.write(Data("[load stage] \(stage)\n".utf8))
+            }
+            progress?(fraction, stage)
+        }
+        #else
+        return progress
+        #endif
+    }
+    #endif
 
     /// Diarization method for new loads. iOS is always `.default` (classic).
     /// On macOS a hidden `UserDefaults` key opts into v2 for validation:
@@ -86,9 +135,26 @@ actor PipelineService {
     /// uses the diarizer, so any loaded pipeline serves; avoid dumping a
     /// loaded pipeline just to satisfy an engine default.
     func embedVoice(audio: [Float]) async throws -> [Float] {
-        let pipeline = try await ensureLoaded(engine: loadedEngine ?? .resolvedDefault())
+        let pipeline = try await ensureLoaded(engine: ASREngine.resolved(loadedEngine))
         return pipeline.embedVoice(audio: audio)
     }
+}
+
+/// Loading the models for Cohere Transcribe failed — most likely its 1.6 GB
+/// first-use download (offline, disk full). Readable as-is: a failed
+/// session shows `"\(error)"`, so `description` carries the message.
+struct CohereLoadError: Error, LocalizedError, CustomStringConvertible {
+    let underlying: Error
+
+    var errorDescription: String? {
+        var reason = underlying.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let last = reason.last, !".!?)".contains(last) { reason += "." }
+        return "Couldn't download or load the Cohere Transcribe model. \(reason) "
+            + "The first use downloads 1.6 GB from Hugging Face — check your internet "
+            + "connection and free disk space, then Retry, or choose another engine "
+            + "in Settings."
+    }
+    var description: String { errorDescription ?? "Couldn't load the Cohere Transcribe model." }
 }
 
 extension MeetingTranscript {

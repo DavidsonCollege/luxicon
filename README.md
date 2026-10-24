@@ -84,6 +84,9 @@ the same `~/Luxicon` library the phone pushes into and the MCP server reads.
 - **Privacy:** same posture as the phone app. Audio and transcripts stay on
   the Mac; the only network traffic is the model downloads and the opt-in
   features described below.
+- **Transcription engine:** Settings → Transcription. Optional: Cohere
+  Transcribe (Mac only) downloads a 1.6 GB model from Hugging Face when you
+  choose it.
 
 Build it yourself with `scripts/build-mac-app.sh` (see
 [docs/releasing.md](docs/releasing.md)).
@@ -197,7 +200,8 @@ asks first.
   restored phone keeps your library.
 - Out of the box, the only network traffic is the model downloads — the
   transcription models from Hugging Face, and on iOS 26 the system speech
-  model from Apple (no user data attached).
+  model from Apple (no user data attached). Optional: Cohere Transcribe (Mac
+  only) downloads a 1.6 GB model from Hugging Face when you choose it.
 - On iOS 26 and later, transcription can use Apple's built-in speech model — a
   system component that Apple's OS downloads and runs on-device, the same way
   keyboard dictation works; audio still never leaves the phone.

@@ -13,11 +13,11 @@ let package = Package(
         .executable(name: "luxicon-mcp", targets: ["LuxiconMCP"]),
     ],
     dependencies: [
-        // Exact SHA past v0.0.21: the Parakeet streaming API this package
-        // uses postdates the last upstream tag. Move to `from:` once a
-        // release containing it is tagged.
+        // Tag v0.0.28, pinned by exact SHA: classic diarization is vendored
+        // (ClassicDiarization/) and Parakeet output was checked against the
+        // previous pin, so a bump must be a deliberate, re-verified change.
         .package(url: "https://github.com/soniqo/speech-swift.git",
-                 revision: "e403d0bdd5e134ddbca076ca9e75fd28761e69b1"),
+                 revision: "231f8eb9f0971fee335fef49f42d2975e4fbf8bc"),
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.0"),
         // Direct dependency (already transitive via speech-swift) so LuxiconKit
         // can bound the MLX buffer cache during long pipeline runs.

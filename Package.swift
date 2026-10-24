@@ -31,6 +31,10 @@ let package = Package(
                 .product(name: "ParakeetASR", package: "speech-swift"),
                 .product(name: "ParakeetStreamingASR", package: "speech-swift"),
                 .product(name: "AudioCommon", package: "speech-swift"),
+                // Cohere Transcribe is a Mac-only engine (~4 GB peak memory);
+                // never link it into the iOS app.
+                .product(name: "CohereTranscribeASR", package: "speech-swift",
+                         condition: .when(platforms: [.macOS])),
                 .product(name: "MLX", package: "mlx-swift"),
                 // The vendored classic diarizer (ClassicDiarization/) defines MLXNN modules.
                 .product(name: "MLXNN", package: "mlx-swift"),

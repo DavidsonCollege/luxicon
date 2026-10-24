@@ -32,7 +32,9 @@ struct LuxiconCLI {
               --title <title>           meeting title (default: file name)
               --vocab "a, b, c"         names/terms to ground transcription in
               --vocab-file terms.json   vocabulary JSON ({"terms":[{"term":...,"soundsLike":[...]}]})
-              --engine parakeet|appleSpeech ASR engine (Parakeet TDT or Apple SpeechTranscriber)
+              --engine parakeet|appleSpeech|cohere
+                                        ASR engine (Parakeet TDT, Apple SpeechTranscriber, or
+                                        Cohere Transcribe — ~1.6 GB download, ~4 GB memory)
               --save-diarization f.json write the diarization result (A/B: share turns across runs)
               --load-diarization f.json reuse a saved diarization instead of diarizing
               --diarizer classic|v2     diarization pipeline (default classic; v2 is opt-in, validation only)
@@ -214,7 +216,7 @@ struct LuxiconCLI {
                 i += 2
             case "--engine":
                 guard let parsed = ASREngine(rawValue: try value(after: "--engine", at: i)) else {
-                    throw ValidationError("--engine expects parakeet or appleSpeech")
+                    throw ValidationError("--engine expects parakeet, appleSpeech or cohere")
                 }
                 engine = parsed
                 i += 2

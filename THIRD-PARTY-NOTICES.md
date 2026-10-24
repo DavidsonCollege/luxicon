@@ -13,6 +13,7 @@ Downloaded from Hugging Face on first use, run entirely on-device:
 - **Pyannote segmentation 3.0** — MIT — © pyannote (Hervé Bredin) (pyannote/segmentation-3.0). Converted to MLX by the speech-swift project. — <https://huggingface.co/aufklarer/Pyannote-Segmentation-MLX>
 - **WeSpeaker ResNet34 speaker embeddings** — CC-BY-4.0 — © WeSpeaker developers / pyannote (pyannote/wespeaker-voxceleb-resnet34-LM). Converted to MLX by the speech-swift project. — <https://huggingface.co/aufklarer/WeSpeaker-ResNet34-LM-MLX>
 - **NVIDIA Parakeet EOU 120M (streaming, live captions)** — NVIDIA Open Model License — © NVIDIA Corporation (nvidia/parakeet_realtime_eou_120m-v1). Converted to CoreML by the speech-swift project. License: https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/ — <https://huggingface.co/aufklarer/Parakeet-EOU-120M-CoreML-INT8>
+- **Cohere Transcribe 03-2026 (Mac only)** — Apache-2.0 — © Cohere (CohereLabs/cohere-transcribe-03-2026). MLX conversion (aufklarer/Cohere-Transcribe-2B-MLX-5bit) by the speech-swift project. — <https://huggingface.co/CohereLabs/cohere-transcribe-03-2026>
 
 ## Swift packages
 
@@ -151,7 +152,13 @@ This product contains code from swift-foundation.
 - Copyright (c) 2023 ml-explore
 - <https://github.com/ml-explore/mlx-swift>
 
-### speech-swift e403d0bdd5e1
+### mlx-swift-lm 3.31.4
+
+- License: MIT
+- Copyright (c) 2024 ml-explore
+- <https://github.com/ml-explore/mlx-swift-lm>
+
+### speech-swift 231f8eb9f097
 
 - License: Apache-2.0
 - Copyright 2025 Ivan Digital
@@ -1054,7 +1061,12 @@ This product uses swift-async-algorithms.
 ---
 ```
 
-### swift-system 1.7.4
+### swift-syntax 603.0.2
+
+- License: Apache-2.0
+- <https://github.com/swiftlang/swift-syntax>
+
+### swift-system 1.8.1
 
 - License: Apache-2.0
 - <https://github.com/apple/swift-system>

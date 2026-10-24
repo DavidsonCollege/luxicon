@@ -43,8 +43,15 @@
       "copyright": "Copyright (c) 2023 ml-explore"
     },
     {
+      "name": "mlx-swift-lm",
+      "version": "3.31.4",
+      "license": "MIT",
+      "url": "https://github.com/ml-explore/mlx-swift-lm",
+      "copyright": "Copyright (c) 2024 ml-explore"
+    },
+    {
       "name": "speech-swift",
-      "version": "e403d0bdd5e1",
+      "version": "231f8eb9f097",
       "license": "Apache-2.0",
       "url": "https://github.com/soniqo/speech-swift",
       "copyright": "Copyright 2025 Ivan Digital"
@@ -225,8 +232,15 @@
       "copyright": "Copyright 2019-2023 The ServiceLifecycle Project"
     },
     {
+      "name": "swift-syntax",
+      "version": "603.0.2",
+      "license": "Apache-2.0",
+      "url": "https://github.com/swiftlang/swift-syntax",
+      "copyright": null
+    },
+    {
       "name": "swift-system",
-      "version": "1.7.4",
+      "version": "1.8.1",
       "license": "Apache-2.0",
       "url": "https://github.com/apple/swift-system",
       "copyright": null
@@ -288,6 +302,13 @@
       "license": "NVIDIA Open Model License",
       "url": "https://huggingface.co/aufklarer/Parakeet-EOU-120M-CoreML-INT8",
       "copyright": "© NVIDIA Corporation (nvidia/parakeet_realtime_eou_120m-v1). Converted to CoreML by the speech-swift project. License: https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/"
+    },
+    {
+      "name": "Cohere Transcribe 03-2026 (Mac only)",
+      "version": null,
+      "license": "Apache-2.0",
+      "url": "https://huggingface.co/CohereLabs/cohere-transcribe-03-2026",
+      "copyright": "© Cohere (CohereLabs/cohere-transcribe-03-2026). MLX conversion (aufklarer/Cohere-Transcribe-2B-MLX-5bit) by the speech-swift project."
     }
   ]
 }

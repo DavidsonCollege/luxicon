@@ -9,6 +9,13 @@ public protocol TurnTranscriber: AnyObject {
     /// Whether `context` is honored (decoder-level vocabulary biasing).
     var supportsContext: Bool { get }
     func transcribeTurn(_ audio: [Float], sampleRate: Int, context: [String]?) -> TranscriptionResult
+    /// Engine-specific cleanup of one turn's trimmed text, given the diarized
+    /// turn's duration (seconds, without ASR padding). Default: unchanged.
+    func filterTurnText(_ text: String, turnDuration: Double) -> String
+}
+
+public extension TurnTranscriber {
+    func filterTurnText(_ text: String, turnDuration: Double) -> String { text }
 }
 
 /// Parakeet TDT (CoreML, Neural Engine). Fast and battery-friendly; no
@@ -28,6 +35,9 @@ public enum ASREngine: String, Codable, Sendable {
     case parakeet
     /// Apple SpeechTranscriber — system model, out-of-process, iOS 26+.
     case appleSpeech
+    /// Cohere Transcribe 03-2026 — 2B MLX model (INT5), macOS only. Exists on
+    /// every platform so a synced/persisted choice decodes; unavailable on iOS.
+    case cohere
 
     /// Tolerant decode: an engine persisted by an older build (e.g. the
     /// retired "qwen3") falls back to the default instead of failing the
@@ -50,6 +60,29 @@ public enum ASREngine: String, Codable, Sendable {
     /// Testable seam for `resolvedDefault()`.
     public static func resolvedDefault(appleSpeechAvailable: Bool) -> ASREngine {
         appleSpeechAvailable ? .appleSpeech : .parakeet
+    }
+
+    /// Whether this platform can run the engine at all. Cohere is linked for
+    /// macOS only. (Apple Speech's OS gate is checked at load time, where it
+    /// throws `EngineUnavailableError` and the app falls back.)
+    public var isAvailable: Bool {
+        switch self {
+        case .parakeet, .appleSpeech: return true
+        case .cohere:
+            #if os(macOS)
+            return true
+            #else
+            return false
+            #endif
+        }
+    }
+
+    /// The engine to run for a user's choice: the choice itself when this
+    /// platform supports it, else the automatic default — so a `cohere`
+    /// choice read on iOS never fails a session or picks Parakeet by accident.
+    public static func resolved(_ choice: ASREngine?) -> ASREngine {
+        guard let choice, choice.isAvailable else { return resolvedDefault() }
+        return choice
     }
 }
 
@@ -149,6 +182,14 @@ public final class MeetingPipeline {
             asr = try await AppleSpeechTranscriber.load { p, stage in
                 progress?(0.5 + p * 0.5, stage)
             }
+        case .cohere:
+            #if os(macOS)
+            asr = try await CohereTurnTranscriber.load { p, stage in
+                progress?(0.5 + p * 0.5, stage)
+            }
+            #else
+            throw EngineUnavailableError(reason: "Cohere Transcribe is available on Mac only")
+            #endif
         }
         return MeetingPipeline(diarizer: diarizer, asr: asr)
     }
@@ -235,6 +276,7 @@ public final class MeetingPipeline {
             let slice = Array(audio[lo..<hi])
             let asrResult = Self.transcribeBounded(slice, asr: asr, sampleRate: sr, context: context)
             var text = asrResult.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            text = asr.filterTurnText(text, turnDuration: span.end - span.start)
             text = VocabularyCorrector.correct(text, entries: vocabulary)
             onTurn?(TurnRecord(start: span.start, end: span.end, speakerId: span.speakerId, text: text))
             guard !text.isEmpty else { continue }

@@ -1,6 +1,7 @@
 import Foundation
 import LuxiconKit
 import AudioCommon
+import SpeechVAD
 
 /// Development harness: process a recording from the command line.
 ///
@@ -22,6 +23,7 @@ struct LuxiconCLI {
             print("""
             usage: luxicon-cli <audio-file> [options]
                    luxicon-cli push <file.json> --token <pairing token>
+                   luxicon-cli captions <audio-file> --seconds <n>
                    luxicon-cli summarize <transcript.json> [--context "Name=text"]
                                          [--context-file "Name=path"]
                                          [--chunk-chars <n>] [--second-pass]
@@ -31,6 +33,10 @@ struct LuxiconCLI {
               --vocab "a, b, c"         names/terms to ground transcription in
               --vocab-file terms.json   vocabulary JSON ({"terms":[{"term":...,"soundsLike":[...]}]})
               --engine parakeet|appleSpeech ASR engine (Parakeet TDT or Apple SpeechTranscriber)
+              --save-diarization f.json write the diarization result (A/B: share turns across runs)
+              --load-diarization f.json reuse a saved diarization instead of diarizing
+              --diarize-only            stop after diarization (needs --save-diarization)
+              --turn-log f.jsonl        write one {start,end,speakerId,text} JSON line per turn
             """)
             return
         }
@@ -86,7 +92,7 @@ struct LuxiconCLI {
                         throw ValidationError("--chunk-chars expects a positive integer")
                     }
                     chunkChars = n
-                default: throw ValidationError("unknown option \(args[j])")
+            default: throw ValidationError("unknown option \(args[j])")
                 }
                 j += 2
             }
@@ -119,6 +125,31 @@ struct LuxiconCLI {
             return
         }
 
+        // Subcommand: feed the first N seconds through the live-caption
+        // engine in 100 ms chunks and print the final committed text.
+        //   luxicon-cli captions <audio> --seconds <n>
+        if args[0] == "captions" {
+            guard args.count >= 4, args[2] == "--seconds", let seconds = Double(args[3]), seconds > 0 else {
+                throw ValidationError("usage: luxicon-cli captions <audio-file> --seconds <n>")
+            }
+            let sr = MeetingPipeline.sampleRate
+            let audio = try AudioFileLoader.load(url: URL(fileURLWithPath: args[1]), targetSampleRate: sr)
+            let samples = Array(audio.prefix(Int(seconds * Double(sr))))
+            let engine = try await LiveTranscriptionEngine.load()
+            try engine.startSession()
+            var committed = ""
+            let chunk = sr / 10
+            var lo = 0
+            while lo < samples.count {
+                let hi = min(lo + chunk, samples.count)
+                if let delta = engine.push(Array(samples[lo..<hi]))?.committedDelta { committed += delta }
+                lo = hi
+            }
+            if let delta = engine.finish()?.committedDelta { committed += delta }
+            print(committed.trimmingCharacters(in: .whitespacesAndNewlines))
+            return
+        }
+
         // Subcommand: push an exported JSON to a LAN listener (tests the
         // same code path the iPhone app uses).
         if args[0] == "push" {
@@ -143,6 +174,10 @@ struct LuxiconCLI {
         var title: String?
         var vocabulary: [VocabularyEntry] = []
         var engine: ASREngine = .parakeet
+        var saveDiarization: String?
+        var loadDiarization: String?
+        var diarizeOnly = false
+        var turnLogPath: String?
 
         func value(after flag: String, at i: Int) throws -> String {
             guard args.indices.contains(i + 1) else {
@@ -179,11 +214,31 @@ struct LuxiconCLI {
                 }
                 engine = parsed
                 i += 2
+                case "--save-diarization": saveDiarization = try value(after: args[i], at: i); i += 2
+            case "--load-diarization": loadDiarization = try value(after: args[i], at: i); i += 2
+            case "--turn-log": turnLogPath = try value(after: args[i], at: i); i += 2
+            case "--diarize-only": diarizeOnly = true; i += 1
             default: throw ValidationError("unknown option \(args[i])")
             }
         }
 
         let sr = MeetingPipeline.sampleRate
+        if diarizeOnly {
+            guard let saveDiarization else { throw ValidationError("--diarize-only needs --save-diarization") }
+            let diarizer = try await DiarizationPipeline.fromPretrained()
+            let audio = try AudioFileLoader.load(url: URL(fileURLWithPath: audioPath), targetSampleRate: sr)
+            let t0 = Date()
+            let result = MeetingPipeline.diarizeOnly(diarizer, audio: audio)
+            let elapsed = Date().timeIntervalSince(t0)
+            try JSONEncoder().encode(DiarizationFile(result)).write(to: URL(fileURLWithPath: saveDiarization))
+            print(String(format: "Diarized %d segments, %d speakers in %.1fs",
+                         result.segments.count, result.numSpeakers, elapsed))
+            return
+        }
+        var precomputed = try loadDiarization.map {
+            try JSONDecoder().decode(DiarizationFile.self, from: Data(contentsOf: URL(fileURLWithPath: $0))).result
+        }
+
         print("Loading models (downloads on first run, engine: \(engine.rawValue))...")
         let pipeline = try await MeetingPipeline.load(engine: engine) { p, stage in
             print(String(format: "  [%3.0f%%] %@", p * 100, stage))
@@ -200,17 +255,36 @@ struct LuxiconCLI {
         let audio = try AudioFileLoader.load(url: url, targetSampleRate: sr)
         print("Loaded \(audioPath): \(TranscriptExport.timestamp(Double(audio.count) / Double(sr)))")
 
+        // A full run that also saves the diarization diarizes up front (same
+        // diarize + cap path as `process`), saves it, and hands it back in.
+        if let saveDiarization, precomputed == nil {
+            let result = MeetingPipeline.diarizeOnly(pipeline.diarizer, audio: audio)
+            try JSONEncoder().encode(DiarizationFile(result)).write(to: URL(fileURLWithPath: saveDiarization))
+            print("Saved diarization: \(result.segments.count) segments, \(result.numSpeakers) speakers")
+            precomputed = result
+        }
+        var turnRecords: [TurnRecord] = []
         let start = Date()
         let transcript = try pipeline.process(
             audio: audio,
             title: title ?? url.deletingPathExtension().lastPathComponent,
             date: Date(),
             enrollments: enrollments,
-            vocabulary: vocabulary
-        ) { p, stage in
-            print(String(format: "  [%3.0f%%] %@", p * 100, stage))
-        }
+            vocabulary: vocabulary,
+            progress: { p, stage in
+                print(String(format: "  [%3.0f%%] %@", p * 100, stage))
+            },
+            precomputedDiarization: precomputed,
+            onTurn: { turnRecords.append($0) }
+        )
         let elapsed = Date().timeIntervalSince(start)
+        if let turnLogPath {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            let lines = try turnRecords.map { String(decoding: try encoder.encode($0), as: UTF8.self) }
+            try (lines.joined(separator: "\n") + "\n").write(
+                to: URL(fileURLWithPath: turnLogPath), atomically: true, encoding: .utf8)
+        }
         let rtf = elapsed / max(transcript.duration, 0.001)
         print(String(format: "Processed in %.1fs (%.2fx real-time)\n", elapsed, rtf))
 

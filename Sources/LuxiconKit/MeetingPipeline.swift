@@ -166,6 +166,8 @@ public final class MeetingPipeline {
     ///     Injected as decoder context on context-capable engines, and applied
     ///     as a post-ASR near-miss correction on every engine.
     ///   - progress: (0–1, stage description); checked between turns for Task cancellation
+    ///   - precomputedDiarization: skip diarization and use this result (A/B tooling)
+    ///   - onTurn: called for every transcribed turn, including ones whose text is empty
     public func process(
         audio: [Float],
         title: String,
@@ -173,7 +175,9 @@ public final class MeetingPipeline {
         enrollments: [VoiceEnrollment] = [],
         vocabulary: [VocabularyEntry] = [],
         options: Options = .oneOnOne,
-        progress: ((Double, String) -> Void)? = nil
+        progress: ((Double, String) -> Void)? = nil,
+        precomputedDiarization: DiarizationResult? = nil,
+        onTurn: ((TurnRecord) -> Void)? = nil
     ) throws -> MeetingTranscript {
         let sr = Self.sampleRate
         let duration = Double(audio.count) / Double(sr)
@@ -188,7 +192,9 @@ public final class MeetingPipeline {
         defer { MLX.Memory.clearCache() }
 
         // 1. Diarize (≈ first 60% of the work)
-        var result = diarizer.diarize(audio: audio, sampleRate: sr, config: options.diarization) { p, stage in
+        var result = precomputedDiarization ?? diarizer.diarize(
+            audio: audio, sampleRate: sr, config: options.diarization
+        ) { p, stage in
             progress?(Double(p) * 0.6, stage)
             return !Task.isCancelled
         }
@@ -215,6 +221,7 @@ public final class MeetingPipeline {
             let asrResult = Self.transcribeBounded(slice, asr: asr, sampleRate: sr, context: context)
             var text = asrResult.text.trimmingCharacters(in: .whitespacesAndNewlines)
             text = VocabularyCorrector.correct(text, entries: vocabulary)
+            onTurn?(TurnRecord(start: span.start, end: span.end, speakerId: span.speakerId, text: text))
             guard !text.isEmpty else { continue }
             turns.append(TranscriptTurn(
                 id: turns.count,
@@ -348,6 +355,17 @@ public final class MeetingPipeline {
             }
         }
         return turns
+    }
+
+    /// Diarize + cap exactly as `process` does (same MLX cache bound), for the
+    /// CLI's --diarize-only.
+    public static func diarizeOnly(
+        _ diarizer: PyannoteDiarizationPipeline, audio: [Float], options: Options = .oneOnOne
+    ) -> DiarizationResult {
+        MLX.Memory.cacheLimit = min(MLX.Memory.cacheLimit, gpuCacheLimit)
+        defer { MLX.Memory.clearCache() }
+        let result = diarizer.diarize(audio: audio, sampleRate: sampleRate, config: options.diarization)
+        return capSpeakers(result, to: options.maxSpeakers)
     }
 
     /// Keep the `max` speakers with the most talk time; reassign the rest to the

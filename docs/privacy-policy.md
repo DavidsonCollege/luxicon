@@ -34,8 +34,8 @@ the same way the iPhone app does.
   included in Time Machine backups like the rest of your home folder.
 - The microphone is used only while you are recording.
 - The Mac app adds no network connections beyond those listed below (it
-  downloads the same speech models, and URL sync works the same way when
-  you turn it on). Sessions from your iPhone reach the Mac only through the
+  downloads the same speech models, plus Cohere Transcribe if you choose
+  it, and URL sync works the same way when you turn it on). Sessions from your iPhone reach the Mac only through the
   opt-in Mac sync below.
 
 ## Network connections the app makes
@@ -47,9 +47,9 @@ the same way the iPhone app does.
   fetched from Hugging Face instead). No user data is sent — these are file
   downloads.
 - **Cohere Transcribe model download** (optional, Mac only, off by default):
-  Cohere Transcribe (Mac only) downloads a 1.6 GB model from Hugging Face
-  when you choose it in Settings → Transcription. Like the other speech
-  models, it is a file download — no user data is sent — and transcription
+  If you choose Cohere Transcribe in Settings → Transcription, the Mac
+  downloads a 1.6 GB model from Hugging Face the first time it
+  transcribes. Like the other speech models, it is a file download — no user data is sent — and transcription
   with it runs entirely on the Mac.
 - **Mac sync** (optional, off by default): if you pair a Mac, transcripts
   and summaries you choose to push travel over your local network to that

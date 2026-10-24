@@ -142,6 +142,52 @@ out += [
     "- <https://github.com/soniqo/speech-swift>",
     "",
 ]
+# Third-party code inside a package (not its own Package.resolved pin, and
+# speech-swift has no NOTICE file), so the loop above can't see it. Keep in
+# sync with the "Portions adapted from" headers in the speech-swift products
+# LuxiconKit links — re-grep them after every speech-swift bump.
+MLX_AUDIO_SWIFT_MIT = """\
+MIT License
+
+Copyright (c) 2025 Prince Canuma
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE."""
+out += [
+    "## Code adapted within dependencies",
+    "",
+    "### mlx-audio-swift (MIT, via speech-swift CohereTranscribeASR, Mac only)",
+    "",
+    "speech-swift's `CohereTranscribeASR` module (`CohereTranscribe.swift`,",
+    "`CohereTranscribeDecoder.swift`, `CohereTranscribeEncoder.swift`,",
+    "`WeightLoading.swift`), linked into the Mac app and command-line tools only,",
+    "contains portions adapted from mlx-audio-swift.",
+    "",
+    "- License: MIT",
+    "- Copyright (c) 2025 Blaizzy and contributors (per the adapted files' headers)",
+    "- Copyright (c) 2025 Prince Canuma (per the upstream LICENSE)",
+    "- <https://github.com/Blaizzy/mlx-audio-swift>",
+    "",
+    "```",
+    MLX_AUDIO_SWIFT_MIT,
+    "```",
+    "",
+]
 out += [
     "## License texts",
     "",

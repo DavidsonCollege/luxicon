@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import AudioCommon
+import SpeechVAD
 @testable import LuxiconKit
 
 @Suite struct CohereEngineTests {
@@ -64,5 +65,60 @@ import AudioCommon
         #expect(ASREngine.resolved(nil) == ASREngine.resolvedDefault())
         #expect(ASREngine.resolved(.parakeet) == .parakeet)
         #expect(ASREngine.parakeet.isAvailable)
+    }
+
+    // MARK: Pipeline wiring
+
+    /// Emits one fixed diarization; never touched for embeddings here.
+    private final class FixedDiarizer: SpeakerDiarizer {
+        let segments: [DiarizedSegment]
+        init(_ segments: [DiarizedSegment]) { self.segments = segments }
+        var embeddingModel: WeSpeakerModel { fatalError("not used by process") }
+        func diarize(
+            audio: [Float], sampleRate: Int, config: DiarizationConfig,
+            progressHandler: ((Float, String) -> Bool)?
+        ) -> DiarizationResult {
+            DiarizationResult(segments: segments, numSpeakers: 1, speakerEmbeddings: [])
+        }
+    }
+
+    /// Hallucinates a closer and records what the pipeline hands the filter.
+    private final class ClosingASR: TurnTranscriber {
+        var sliceSeconds: [Double] = []
+        var filterDurations: [Double] = []
+        var supportsContext: Bool { false }
+        func transcribeTurn(_ audio: [Float], sampleRate: Int, context: [String]?) -> TranscriptionResult {
+            sliceSeconds.append(Double(audio.count) / Double(sampleRate))
+            return TranscriptionResult(text: "Thank you.")
+        }
+        func filterTurnText(_ text: String, turnDuration: Double) -> String {
+            filterDurations.append(turnDuration)
+            return ShortTurnGuard.filter(text, duration: turnDuration)
+        }
+    }
+
+    /// The guard must judge the diarized span (0.95 s), not the padded slice
+    /// the engine hears (0.95 + 2 × 0.15 = 1.25 s) — otherwise it never fires.
+    @Test func pipelinePassesUnpaddedTurnDurationToFilter() throws {
+        let asr = ClosingASR()
+        let pipeline = MeetingPipeline(
+            diarizer: FixedDiarizer([DiarizedSegment(startTime: 1.0, endTime: 1.95, speakerId: 0)]),
+            asr: asr)
+        let audio = [Float](repeating: 0, count: 3 * MeetingPipeline.sampleRate)
+        // `process` minus its MLX cache bounds (which need a Metal library
+        // the test host doesn't have): diarize → turns → transcribeTurns.
+        let options = MeetingPipeline.Options.oneOnOne
+        let diarized = pipeline.diarizer.diarize(
+            audio: audio, sampleRate: MeetingPipeline.sampleRate, config: options.diarization)
+        let spans = MeetingPipeline.buildTurns(segments: diarized.segments, mergeGap: options.turnMergeGap)
+        var records: [TurnRecord] = []
+        let turns = try pipeline.transcribeTurns(
+            spans, audio: audio, vocabulary: [], options: options, onTurn: { records.append($0) })
+
+        #expect(asr.filterDurations.count == 1)
+        #expect(abs((asr.filterDurations.first ?? 0) - 0.95) < 1e-4)
+        #expect(abs((asr.sliceSeconds.first ?? 0) - 1.25) < 1e-3)
+        #expect(turns.isEmpty)
+        #expect(records.map(\.text) == [""])
     }
 }

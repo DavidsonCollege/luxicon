@@ -263,6 +263,39 @@ public final class MeetingPipeline {
         let turnSpans = Self.buildTurns(segments: result.segments, mergeGap: options.turnMergeGap)
 
         // 4. Transcribe each turn
+        let turns = try transcribeTurns(
+            turnSpans, audio: audio, vocabulary: vocabulary, options: options,
+            progress: progress, onTurn: onTurn)
+
+        try Self.checkTranscriptionYield(turns: turns, spans: turnSpans)
+
+        // 5. Name speakers from enrollments
+        var transcript = MeetingTranscript(title: title, date: date, duration: duration, turns: turns)
+        for (speakerId, name) in Self.matchEnrollments(
+            centroids: result.speakerEmbeddings,
+            enrollments: enrollments,
+            threshold: options.enrollmentThreshold
+        ) {
+            transcript.setName(name, forSpeaker: speakerId)
+        }
+        progress?(1.0, "Done")
+        return transcript
+    }
+
+    /// Step 4 of `process`: transcribe each turn span (padded by
+    /// `options.asrPadding`), apply the engine's `filterTurnText` on the
+    /// unpadded span duration, then vocabulary correction. Empty turns are
+    /// reported to `onTurn` but dropped from the result. No MLX use, so
+    /// tests can drive it without a Metal library.
+    func transcribeTurns(
+        _ turnSpans: [TurnSpan],
+        audio: [Float],
+        vocabulary: [VocabularyEntry],
+        options: Options,
+        progress: ((Double, String) -> Void)? = nil,
+        onTurn: ((TurnRecord) -> Void)? = nil
+    ) throws -> [TranscriptTurn] {
+        let sr = Self.sampleRate
         let context = asr.supportsContext ? VocabularyCorrector.contextTerms(for: vocabulary) : nil
         var turns: [TranscriptTurn] = []
         turns.reserveCapacity(turnSpans.count)
@@ -289,20 +322,7 @@ public final class MeetingPipeline {
                 confidence: asrResult.confidence
             ))
         }
-
-        try Self.checkTranscriptionYield(turns: turns, spans: turnSpans)
-
-        // 5. Name speakers from enrollments
-        var transcript = MeetingTranscript(title: title, date: date, duration: duration, turns: turns)
-        for (speakerId, name) in Self.matchEnrollments(
-            centroids: result.speakerEmbeddings,
-            enrollments: enrollments,
-            threshold: options.enrollmentThreshold
-        ) {
-            transcript.setName(name, forSpeaker: speakerId)
-        }
-        progress?(1.0, "Done")
-        return transcript
+        return turns
     }
 
     // MARK: - Bounded transcription

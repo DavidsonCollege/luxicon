@@ -48,7 +48,7 @@ switch, so it can be validated before anyone adopts it.
    `enum DiarizationMethod { case classic, case pyannoteV2(threshold: Float) }`.
    - Default: `.classic` everywhere.
    - `.pyannoteV2` uses the library's new pipeline with `clusteringThreshold`;
-     the default threshold for that case is 0.6.
+     the default threshold for that case is **0.4**. See "Validation results" below; 0.6 collapsed a real meeting.
    - Not exposed in normal UI. Reachable through a luxicon-cli flag
      (`--diarizer classic|v2`, `--cluster-threshold`), and on the Mac through a
      hidden `UserDefaults` key, `diarizationMethod`, for dogfooding.
@@ -139,6 +139,26 @@ These are my calls; JD can override any of them.
    and `<Meeting B recording, local only>` (read-only). Build the
    baseline in a scratch worktree of `main`; never switch branches in the main
    checkout.
+
+## Validation results (2026-10-23, 4 two-person meetings: 28–50 min)
+
+| Meeting | v2 at 0.715 | v2 at 0.6 | v2 at 0.4 |
+|---|---|---|---|
+| Meeting A | collapsed to 1 speaker | 99.8% | 99.8% |
+| Meeting B | 99.5% | 99.5% | 99.7% |
+| Untitled | 99.6% | 99.6% | 99.6% |
+| New Recording 3 | collapsed | **collapsed (59.1%)** | 96.6% |
+
+- **Safe range:** thresholds 0.30–0.55 give the same two-speaker split on all
+  four. New Recording 3 collapses at 0.575 and above, so 0.6 is NOT safe and
+  the v2 default here is 0.4.
+- **Where the two disagree:** of the 12 largest spans, v2 looked right in 7,
+  classic in 2; the rest were split or unclear.
+- **Cost:** v2 diarization is 5–6× slower on the Mac (about 0.03× real-time
+  vs 0.005×); peak memory is about the same. iPhone figures are still pending.
+- **If v2 ever becomes the default:** add a 1-on-1 guard. Re-cluster at a lower
+  threshold, or force 2 clusters, when the second speaker has under about 5% of
+  talk time. Out of scope here; the switch stays off.
 
 ## Non-goals
 - Cohere on iPhone.

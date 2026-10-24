@@ -227,7 +227,9 @@ struct LuxiconCLI {
             case "--diarizer": diarizerName = try value(after: args[i], at: i); i += 2
             case "--cluster-threshold":
                 let raw = try value(after: args[i], at: i)
-                guard let f = Float(raw) else { throw ValidationError("--cluster-threshold expects a number, got '\(raw)'") }
+                guard let f = Float(raw), f.isFinite, f > 0 else {
+                    throw ValidationError("--cluster-threshold expects a positive number, got '\(raw)'")
+                }
                 clusterThreshold = f; i += 2
             default: throw ValidationError("unknown option \(args[i])")
             }
@@ -235,6 +237,9 @@ struct LuxiconCLI {
 
         guard let diarization = DiarizationMethod(cliValue: diarizerName, threshold: clusterThreshold) else {
             throw ValidationError("--diarizer expects classic or v2")
+        }
+        if clusterThreshold != nil, diarization == .classic {
+            FileHandle.standardError.write(Data("warning: --cluster-threshold is ignored with --diarizer classic (use --diarizer v2)\n".utf8))
         }
         let sr = MeetingPipeline.sampleRate
         if diarizeOnly {

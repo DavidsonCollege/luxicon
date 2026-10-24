@@ -5,7 +5,9 @@ import os
 #endif
 
 /// Owns the (non-Sendable) models and serializes all inference.
-/// Models load lazily on first use and stay resident (~700 MB download on first run).
+/// Models load lazily on first use and stay resident (downloads on first use:
+/// ~700 MB for the default engines; Cohere Transcribe on the Mac adds 1.6 GB and
+/// is released after each transcription).
 actor PipelineService {
     static let shared = PipelineService()
 
@@ -102,8 +104,10 @@ actor PipelineService {
         #if os(macOS)
         let defaults = UserDefaults.standard
         guard let name = defaults.string(forKey: "diarizationMethod") else { return .default }
-        let threshold = defaults.object(forKey: "diarizationThreshold") != nil
-            ? Float(defaults.double(forKey: "diarizationThreshold")) : nil
+        // Non-numeric / out-of-range values must not become a 0 threshold.
+        let raw = defaults.double(forKey: "diarizationThreshold")
+        let threshold: Float? = defaults.object(forKey: "diarizationThreshold") != nil
+            ? (raw.isFinite && raw > 0 && raw < 1 ? Float(raw) : DiarizationMethod.v2DefaultThreshold) : nil
         return DiarizationMethod(cliValue: name, threshold: threshold) ?? .default
         #else
         return .default
@@ -123,6 +127,21 @@ actor PipelineService {
         let pipeline = try await ensureLoaded(engine: engine) { p, stage in
             progress(p * 0.2, stage)
         }
+        #if os(macOS)
+        // Cohere Transcribe holds ~2 GB resident and is documented as needing
+        // that memory only "while transcribing", so drop it as soon as this
+        // call ends (success, throw or cancellation). Safe under actor
+        // reentrancy: there is no suspension point between ensureLoaded
+        // returning and this defer running (pipeline.process is synchronous),
+        // so no other caller can be mid-use of the pipeline we release.
+        defer {
+            if loadedEngine == .cohere {
+                self.pipeline = nil
+                loadedEngine = nil
+                loadedDiarization = nil
+            }
+        }
+        #endif
         return try pipeline.process(
             audio: audio, title: title, date: date,
             enrollments: enrollments, vocabulary: vocabulary
@@ -140,8 +159,8 @@ actor PipelineService {
     }
 }
 
-/// Loading the models for Cohere Transcribe failed — most likely its 1.6 GB
-/// first-use download (offline, disk full). Readable as-is: a failed
+/// Loading the speech models for Cohere Transcribe failed — most likely the
+/// first-use download (1.6 GB model, plus diarization models on a fresh Mac) (offline, disk full). Readable as-is: a failed
 /// session shows `"\(error)"`, so `description` carries the message.
 struct CohereLoadError: Error, LocalizedError, CustomStringConvertible {
     let underlying: Error
@@ -149,12 +168,12 @@ struct CohereLoadError: Error, LocalizedError, CustomStringConvertible {
     var errorDescription: String? {
         var reason = underlying.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         if let last = reason.last, !".!?)".contains(last) { reason += "." }
-        return "Couldn't download or load the Cohere Transcribe model. \(reason) "
-            + "The first use downloads 1.6 GB from Hugging Face — check your internet "
-            + "connection and free disk space, then Retry, or choose another engine "
-            + "in Settings."
+        return "Couldn't download or load the speech models for Cohere Transcribe. \(reason) "
+            + "The first use downloads them from Hugging Face (about 1.6 GB for Cohere) — "
+            + "check your internet connection and free disk space, then Retry, or choose "
+            + "another engine in Settings."
     }
-    var description: String { errorDescription ?? "Couldn't load the Cohere Transcribe model." }
+    var description: String { errorDescription ?? "Couldn't load the speech models for Cohere Transcribe." }
 }
 
 extension MeetingTranscript {

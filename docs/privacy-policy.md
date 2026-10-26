@@ -53,11 +53,11 @@ the same way the iPhone app does.
   transcribes. Like the other speech models, it is a file download — no user data is sent — and transcription
   with it runs entirely on the Mac.
 - **Update check** (Mac only, asks first): Luxicon for Mac can check for new
-  versions. The first time, it asks whether to check automatically; until you
-  say yes, it checks only when you choose Check for Updates…. It reads a small
-  update list from davidsoncollege.github.io and, if you accept an update,
-  downloads the new version from GitHub. No profile of your Mac is sent, and
-  nothing about you, your people, or your meetings.
+  versions. Before it ever checks on its own, it asks whether to check
+  automatically; until you say yes, it checks only when you choose Check for
+  Updates…. It reads a small update list from davidsoncollege.github.io and,
+  if you accept an update, downloads the new version from GitHub. No profile
+  of your Mac is sent, and nothing about you, your people, or your meetings.
 - **Mac sync** (optional, off by default): if you pair a Mac, transcripts
   and summaries you choose to push travel over your local network to that
   Mac, encrypted with a key derived from your pairing token. They do not

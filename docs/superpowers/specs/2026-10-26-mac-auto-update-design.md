@@ -27,7 +27,8 @@ document says otherwise.
 - **Ask first.** Sparkle's standard permission prompt ("Check for updates
   automatically?"), which appears on the second launch. No automatic check
   happens before the person answers yes. Leave `SUEnableAutomaticChecks` unset
-  so Sparkle asks.
+  so Sparkle asks, and set `SUAllowsAutomaticUpdates` false so Sparkle never
+  offers to download and install updates without showing them.
 - **Manual check:** a **Check for Updates…** item in the app menu (after About),
   disabled while Sparkle can't check. It works whether or not automatic checks
   are on, because the person asked.
@@ -108,9 +109,12 @@ new network path, and it is narrow and disclosed:
 ### JD's answers (2026-10-26)
 1. **Releases wait for JD's approval.** Like Oncillascope, the publishing job
    runs in a GitHub `release` environment with JD (`jdmills-edu`) as required
-   reviewer. The signing and notarization secrets the Mac workflow needs, plus
-   `SPARKLE_ED_PRIVATE_KEY`, are available to that environment, so a pushed tag
-   alone can't sign or publish anything. Creating the environment and its
+   reviewer. Only `SPARKLE_ED_PRIVATE_KEY` is an environment secret; the
+   signing and notarization secrets are repo-level, shared with the listener
+   workflow. The environment's required-reviewer gate is what keeps the job
+   from using any of them: it doesn't start until JD approves, so a pushed tag
+   alone can't sign or publish anything. Admins can't bypass the gate
+   (`can_admins_bypass` false). Creating the environment and its
    reviewer rule joins JD's one-time setup (the builder may do it with `gh api`
    if JD's auth allows; JD confirms). The listener workflow keeps working: don't
    remove the repo-level secrets it reads.
@@ -168,7 +172,9 @@ new network path, and it is narrow and disclosed:
   EdDSA-signs but publishes nothing and doesn't touch the feed.
 - **End to end after build 19 is published:** a local build stamped lower (e.g.
   build 18 with Sparkle and the real feed) detects 19, shows the notes,
-  verifies the signature, installs and relaunches into 19.
+  verifies the signature and installs 19. It doesn't relaunch (the installed 19
+  has the real bundle id and would open real data); `CFBundleVersion` is read
+  from disk instead.
 - **Negative test:** an update whose EdDSA signature doesn't match is refused.
 - **Postpone test:** with a recording open, an available update doesn't relaunch
   the app until the recording is closed.

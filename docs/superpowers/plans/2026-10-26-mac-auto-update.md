@@ -29,6 +29,7 @@
 - `SUPublicEDKey` = the public key from Task 2 Step 1
 - `SUEnableSystemProfiling` = `false`
 - `SUEnableAutomaticChecks` must NOT be present, so Sparkle asks the person first.
+- `SUAllowsAutomaticUpdates` = `false`, so Sparkle never offers to download and install updates silently (added in the final review).
 
 **Privacy**
 - No update network request happens before the person opts in, except one they start with Check for Updates….
@@ -200,8 +201,9 @@
   - `--link https://github.com/DavidsonCollege/luxicon/releases`.
   - Keep the guard that refuses to publish if the item count dropped.
   - Add a second guard: every `enclosure url` in the output starts with `$DOWNLOAD_URL_PREFIX` or an older `https://github.com/DavidsonCollege/luxicon/releases/download/mac-v` prefix. Otherwise exit 1.
+  - (Final review) Add a third guard: the new item (this build's `sparkle:version`) exists once and has `sparkle:edSignature`; `generate_appcast` exits 0 and leaves it unsigned when the app's `SUPublicEDKey` doesn't match the signing key. Otherwise exit 1 with `$PAGES_DIR` untouched. `ROTATION_SIGN=1` (local only) signs a key-rotation release with the old key via `sign_update`.
 - [ ] **Step 2: Workflow triggers and gate.**
-  - Triggers: `push: tags: ['mac-v*']`, plus `workflow_dispatch` with a boolean input `dry_run` (default `true`).
+  - Triggers: `push: tags: ['mac-v*']`, plus `workflow_dispatch` with no inputs. A dispatch is always a dry run (Ruling 7, final review): only a pushed tag publishes.
   - One job: `runs-on: macos-26` and `environment: release`.
   - `permissions: contents: write`, and pin actions by SHA, as in Oncillascope.
 - [ ] **Step 3: Build steps.**
@@ -214,7 +216,7 @@
   7. Fetch the Sparkle tools at the pinned version and verify their SHA-256.
   8. Run `bash scripts/build_mlx_metallib.sh release` if the Mac build needs it. Check what the listener workflow does.
   9. Run `scripts/build-mac-app.sh` with the `AC_*` env vars set.
-- [ ] **Step 4: Publish steps**, all skipped when `dry_run` is true:
+- [ ] **Step 4: Publish steps**, all skipped unless the run is a pushed `mac-v*` tag:
   1. Release notes come from the annotated tag message. If it's empty, use `Luxicon for Mac <m> (<b>)`.
   2. `gh release create "$TAG" dist/Luxicon-<m>-<b>.dmg --title "Luxicon for Mac <m> (<b>)" --notes-file …`.
   3. Check out `gh-pages` as a worktree, run `make-appcast.sh` with `DOWNLOAD_URL_PREFIX=https://github.com/DavidsonCollege/luxicon/releases/download/$TAG/`, then commit and push `gh-pages`.
@@ -241,7 +243,7 @@
   - the bump-and-tag commands, with an annotated tag message as the release notes
   - the `release` environment and its approval click
   - what the workflow does
-  - the dry run via `gh workflow run release-mac.yml -f dry_run=true`
+  - the dry run via `gh workflow run release-mac.yml` (every dispatch is a dry run)
   - that `scripts/build-mac-app.sh` stays for local, unpublished builds
   - Sparkle key location (keychain account `edu.davidson.luxicon.mac`, environment secret `SPARKLE_ED_PRIVATE_KEY`)
   - key rotation steps
@@ -271,15 +273,25 @@ Record each step's result in the task report. No commit, unless a DEBUG hook had
 These steps are outward-facing. The controller does them only after JD's go-ahead in the conversation, never as a subagent.
 
 - [ ] **Step 1:** Set `CURRENT_PROJECT_VERSION: 19` in `App/project.yml` and commit `Bump build to 19 for the first auto-updating Mac release`.
-- [ ] **Step 2 (JD go-ahead): environment.** Create the `release` environment with `gh api -X PUT repos/DavidsonCollege/luxicon/environments/release`:
-  - required reviewer: JD's user id, from `gh api users/jdmills-edu -q .id`
-  - deployment branch policy: custom policies `mac-v*` (tag) and `main` (branch, for dry runs)
+- [ ] **Step 2 (JD go-ahead): environment.** Create the `release` environment with `gh api -X PUT repos/DavidsonCollege/luxicon/environments/release` (exact commands: `docs/releasing.md`, Flow 3, "One-time setup"):
+  - required reviewer: JD's user id, from `gh api users/jdmills-edu -q .id`; `prevent_self_review: false` (JD approves his own tag's run)
+  - `can_admins_bypass: false`: the repo has several admins, and with bypass on any of them could skip JD's approval
+  - deployment branch policy: `custom_branch_policies: true`, then policies `mac-v*` (type `tag`, the only publishing runs) and `main` (type `branch`: dispatches are always dry runs, but they sign and notarize, so they need the environment)
+  - check: the environment read-back shows the reviewer and `"can_admins_bypass": false`, and both policies are listed
+  - optional, JD's choice (offer it, don't do it unasked): a tag ruleset on `refs/tags/mac-v*` restricting creation, update and deletion to a bypass team or role (`docs/releasing.md` has the payload)
 - [ ] **Step 3 (JD go-ahead): Sparkle secret.** Export Luxicon's private key with `generate_keys --account edu.davidson.luxicon.mac -x <scratch file>`, run `gh secret set SPARKLE_ED_PRIVATE_KEY --env release < <scratch file>`, then delete the file.
-- [ ] **Step 4 (JD go-ahead): Pages.** Push an orphan `gh-pages` branch holding an empty-item `appcast.xml` (a valid RSS channel with no `<item>`). Enable Pages with `gh api -X POST repos/DavidsonCollege/luxicon/pages -f 'source[branch]=gh-pages' -f 'source[path]=/'`. Confirm that `curl -fsS https://davidsoncollege.github.io/luxicon/appcast.xml` returns it.
-- [ ] **Step 5: after the PR merges.** Run `gh workflow run release-mac.yml -f dry_run=true`. JD approves the run. Expected:
+- [ ] **Step 4 (JD go-ahead): Pages.** Push an orphan `gh-pages` branch holding an empty-item `appcast.xml`: a valid RSS 2.0 channel with no `<item>`, whose `<rss>` element declares `xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"` (`generate_appcast` merges into it and writes `sparkle:` elements). Enable Pages with `gh api -X POST repos/DavidsonCollege/luxicon/pages -f 'source[branch]=gh-pages' -f 'source[path]=/'`. Confirm that `curl -fsS https://davidsoncollege.github.io/luxicon/appcast.xml` returns it.
+- [ ] **Step 5: after the PR merges.** Run `gh workflow run release-mac.yml` (always a dry run). JD approves the run. Expected:
   - the run succeeds
   - the artifact's DMG passes `spctl -a -t open --context context:primary-signature -v` and `xcrun stapler validate`
   - its appcast has one item, whose enclosure URL is under `…/releases/download/mac-v1.0-19/`
+  - the new item has `sparkle:edSignature`
+  - that signature verifies against the artifact DMG with Luxicon's key: `sign_update --verify --account edu.davidson.luxicon.mac <artifact DMG> <edSignature>` (the pair whose public half is `SUPublicEDKey`; confirm with `generate_keys --account edu.davidson.luxicon.mac -p`)
 - [ ] **Step 6 (JD go-ahead): first release.** Push the annotated tag `mac-v1.0-19`, with notes covering Cohere, the mute-crash fix, auto-update, and "if you have build 18, download this one by hand once". JD approves the run. Expected: the GitHub Release exists, and the Pages appcast lists build 19.
-- [ ] **Step 7: end to end on the real feed.** Build a Release copy with bundle id `edu.davidson.luxicon.mac.updatetest` and `CURRENT_PROJECT_VERSION=18`, signed with Developer ID but not notarized, in scratch. Launch it with scratch `-storePath`/`-libraryPath` (allow Release builds to take them for this run, or use the Debug build with `-enableUpdater` and no feed override). Click Check for Updates….
-  Expected: it finds build 19 on `davidsoncollege.github.io`, shows the notes, verifies the signature, installs and relaunches as 19. Then delete the scratch copy and the `edu.davidson.luxicon.mac.updatetest` defaults.
+- [ ] **Step 7: end to end on the real feed.** The installed build 19 is the real one, with bundle id `edu.davidson.luxicon.mac`, so the `.updatetest` scratch-path guard can't protect a relaunch: launched without arguments it would open the real store and `~/Luxicon`. So this step never relaunches (Ruling 8):
+  - Build the **Debug** `LuxiconMac` with `PRODUCT_BUNDLE_IDENTIFIER=edu.davidson.luxicon.mac.updatetest` and `CURRENT_PROJECT_VERSION=18`, and copy it into scratch.
+  - Launch the scratch copy with `-enableUpdater -noRelaunchAfterUpdate -storePath <scratch> -libraryPath <scratch>` and no `-updateFeedURL` (so it reads the real `SUFeedURL`). Click Check for Updates…, then Install Update, then Install and Relaunch. With `-noRelaunchAfterUpdate`, `updaterShouldRelaunchApplication` returns false and Sparkle 2.10.1 stops short of quitting, leaving the update staged.
+  - Quit the scratch app (⌘Q). Sparkle's installer then installs build 19 in place and doesn't relaunch.
+  - Expected: it found build 19 on `davidsoncollege.github.io` and showed the notes; reading from disk, `/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' <scratch>/Luxicon.app/Contents/Info.plist` prints `19` (and `CFBundleIdentifier` prints `edu.davidson.luxicon.mac`); `codesign --verify --deep --strict` passes; no process is running from the scratch path. **Never launch the installed copy.**
+  - Cleanup: delete the scratch copy, `defaults delete edu.davidson.luxicon.mac.updatetest`, and `~/Library/Caches/edu.davidson.luxicon.mac.updatetest`.
+  - Limit: a Debug host doesn't exercise Sparkle exactly as a Release one does (Task 6 found its Autoupdate skipped the atomic swap and Gatekeeper scan). The first real in-app update, from 19 to 20, is the full Release-path check.

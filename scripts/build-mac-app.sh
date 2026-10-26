@@ -6,7 +6,8 @@
 #
 # Credentials (locations only — see docs/releasing.md, Flow 3):
 #   - "Developer ID Application" identity in the login keychain
-#   - notarytool keychain profile `luxicon`
+#   - notarytool: AC_APPLE_ID + AC_TEAM_ID + AC_APP_PASSWORD from the environment
+#     when all three are set (CI), otherwise keychain profile `luxicon` (local)
 #
 # LUXICON_SKIP_NOTARIZE=1 builds a signed, NOT notarized DMG for local testing.
 # Such a DMG must never be published.
@@ -16,7 +17,17 @@ ROOT=$(pwd)
 SKIP_NOTARIZE="${LUXICON_SKIP_NOTARIZE:-0}"
 XCFLAGS=(-skipPackagePluginValidation -skipMacroValidation)
 
-if [ "$SKIP_NOTARIZE" != "1" ]; then
+# notarytool credentials: env (CI) when all three are set, else the keychain profile.
+# Values are only ever passed as arguments, never printed.
+if [ -n "${AC_APPLE_ID:-}" ] && [ -n "${AC_TEAM_ID:-}" ] && [ -n "${AC_APP_PASSWORD:-}" ]; then
+    NOTARY_AUTH=(--apple-id "$AC_APPLE_ID" --team-id "$AC_TEAM_ID" --password "$AC_APP_PASSWORD")
+    NOTARY_AUTH_LABEL="environment credentials"
+else
+    NOTARY_AUTH=(--keychain-profile luxicon)
+    NOTARY_AUTH_LABEL="keychain profile: luxicon"
+fi
+
+if [ "$SKIP_NOTARIZE" != "1" ] && [ "${NOTARY_AUTH[0]}" = "--keychain-profile" ]; then
     echo "==> Checking notarytool keychain profile 'luxicon'"
     if ! xcrun notarytool history --keychain-profile luxicon >/dev/null 2>&1; then
         echo "error: notarytool keychain profile 'luxicon' is missing or invalid." >&2
@@ -42,14 +53,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# notarize <file> <label>: submit to the notary service (keychain profile
-# `luxicon`), wait, and fail unless the status is Accepted, printing the
+# notarize <file> <label>: submit to the notary service (NOTARY_AUTH), wait, and fail unless the status is Accepted, printing the
 # notary log when there is one.
 notarize() {
     local file=$1 label=$2
     local json="$WORK/notarize-$label.json"
-    echo "==> Notarizing $label (keychain profile: luxicon)"
-    xcrun notarytool submit "$file" --keychain-profile luxicon --wait \
+    echo "==> Notarizing $label ($NOTARY_AUTH_LABEL)"
+    xcrun notarytool submit "$file" "${NOTARY_AUTH[@]}" --wait \
         --output-format json > "$json" || true
     cat "$json"
     local status id
@@ -58,7 +68,7 @@ notarize() {
         id=$(plutil -extract id raw -o - "$json" 2>/dev/null || echo "")
         echo "error: $label notarization status is '$status' (submission id: ${id:-unknown})" >&2
         if [ -n "$id" ]; then
-            xcrun notarytool log "$id" --keychain-profile luxicon >&2 || true
+            xcrun notarytool log "$id" "${NOTARY_AUTH[@]}" >&2 || true
         fi
         exit 1
     fi
@@ -101,13 +111,66 @@ if ! grep -Eq 'flags=0x[0-9a-f]+\(.*runtime.*\)' <<<"$SIGINFO"; then
     exit 1
 fi
 echo "    hardened runtime enabled"
-codesign -d --entitlements - --xml "$APP" > "$WORK/entitlements.plist" 2>/dev/null
-KEYS=$(plutil -convert json -o - "$WORK/entitlements.plist")
-if [ "$KEYS" != '{"com.apple.security.device.audio-input":true}' ]; then
-    echo "error: unexpected entitlements (want only audio-input=true): $KEYS" >&2
+check_entitlements() {
+    codesign -d --entitlements - --xml "$APP" > "$WORK/entitlements.plist" 2>/dev/null
+    local keys
+    keys=$(plutil -convert json -o - "$WORK/entitlements.plist")
+    if [ "$keys" != '{"com.apple.security.device.audio-input":true}' ]; then
+        echo "error: unexpected entitlements (want only audio-input=true): $keys" >&2
+        exit 1
+    fi
+    echo "    entitlements: audio-input only (true)"
+}
+check_entitlements
+
+echo "==> Checking Sparkle's helpers"
+# Sparkle's nested helpers must carry the hardened runtime and our Developer ID
+# authority, or notarization rejects the app.
+FW="$APP/Contents/Frameworks/Sparkle.framework"
+sparkle_helpers() {
+    local x
+    [ -d "$FW" ] || return 0
+    echo "$FW"
+    [ -e "$FW/Versions/B/Autoupdate" ] && echo "$FW/Versions/B/Autoupdate"
+    [ -e "$FW/Versions/B/Updater.app" ] && echo "$FW/Versions/B/Updater.app"
+    for x in "$FW"/Versions/B/XPCServices/*.xpc; do [ -e "$x" ] && echo "$x"; done
+    return 0
+}
+# check_sparkle: prints one line per helper; returns 1 if any is non-conforming.
+check_sparkle() {
+    local h info bad=0
+    while IFS= read -r h; do
+        [ -n "$h" ] || continue
+        info=$(codesign -dvv "$h" 2>&1 || true)
+        if grep -Eq 'flags=0x[0-9a-f]+\(.*runtime.*\)' <<<"$info" \
+            && grep -q '^Authority=Developer ID Application' <<<"$info" \
+            && grep -q '^TeamIdentifier=4Z539UE4TT$' <<<"$info"; then
+            echo "    ok: ${h#"$APP/Contents/"}"
+        else
+            echo "    NOT OK (need runtime + Developer ID Application, team 4Z539UE4TT): ${h#"$APP/Contents/"}" >&2
+            bad=1
+        fi
+    done < <(sparkle_helpers)
+    return $bad
+}
+if [ ! -d "$FW" ]; then
+    echo "error: $FW is missing (Sparkle must be embedded in the Mac app)" >&2
     exit 1
 fi
-echo "    entitlements: audio-input only (true)"
+if ! check_sparkle; then
+    echo "==> Export left Sparkle helpers unsigned or ad-hoc; re-signing inside-out"
+    sign() { codesign --force --options runtime --timestamp -s "Developer ID Application" "$@"; }
+    for x in "$FW"/Versions/B/XPCServices/*.xpc; do [ -e "$x" ] && sign "$x"; done
+    [ -e "$FW/Versions/B/Autoupdate" ] && sign "$FW/Versions/B/Autoupdate"
+    [ -e "$FW/Versions/B/Updater.app" ] && sign "$FW/Versions/B/Updater.app"
+    sign "$FW"
+    # Re-seal the app so its signature covers the re-signed helpers; a bare
+    # --force would drop the entitlements, so pass them again.
+    sign --entitlements "$ROOT/App/LuxiconMac.entitlements" "$APP"
+    codesign --verify --deep --strict --verbose=2 "$APP"
+    check_sparkle || { echo "error: Sparkle helpers still non-conforming after re-signing" >&2; exit 1; }
+    check_entitlements
+fi
 
 echo "==> Checking for the MLX Metal library"
 # Diarization needs MLX's compiled shaders; without them it fails at runtime.

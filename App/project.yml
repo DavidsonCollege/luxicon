@@ -7,12 +7,17 @@ options:
 packages:
   Luxicon:
     path: ..
+  # The Mac app's updater only. Pinned exactly; keep the release
+  # workflow's Sparkle tools tarball at the same version.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.1
 settings:
   base:
     # One version train for the app and every extension: App Store validation
     # rejects uploads whose extension CFBundleVersion differs from the app's.
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: 18
+    CURRENT_PROJECT_VERSION: 19
 targets:
   Luxicon:
     type: application
@@ -126,6 +131,7 @@ targets:
     dependencies:
       - package: Luxicon
         product: LuxiconKit
+      - package: Sparkle
     info:
       path: MacInfo.plist
       properties:
@@ -137,6 +143,15 @@ targets:
         NSMicrophoneUsageDescription: >-
           Luxicon records your 1-on-1 meetings so it can transcribe them.
           All processing happens on this Mac; audio never leaves it.
+        # Sparkle. No SUEnableAutomaticChecks, so Sparkle asks before its
+        # first scheduled check; until the person agrees, only Check for
+        # Updates… contacts the feed. SUAllowsAutomaticUpdates false: Sparkle
+        # never offers "Automatically download and install updates", so an
+        # update is always shown and only downloaded if the person accepts it.
+        SUFeedURL: https://davidsoncollege.github.io/luxicon/appcast.xml
+        SUPublicEDKey: ok0XZJY3rNX2WfVIHLoVHSysH4hGl4Iq+vBFUPiRQ54=
+        SUEnableSystemProfiling: false
+        SUAllowsAutomaticUpdates: false
     settings:
       base:
         PRODUCT_NAME: Luxicon

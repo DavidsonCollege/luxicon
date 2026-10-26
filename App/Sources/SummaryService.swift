@@ -115,6 +115,9 @@ extension Store {
         let sessionId = session.id
         processing.summarizing[sessionId] = "Preparing…"
         processing.summarizeError[sessionId] = nil
+        #if os(macOS)
+        processing.onBusyChange?()  // the updater waits while summarizing
+        #endif
 
         // Participant context adds nuance the transcript alone can't carry
         // (roles, running themes). Guided generation keeps the system model
@@ -163,6 +166,9 @@ extension Store {
             }
             processing.summarizing[sessionId] = nil
             processing.tasks[sessionId] = nil
+            #if os(macOS)
+            processing.onBusyChange?()
+            #endif
         }
         processing.tasks[sessionId] = task
     }

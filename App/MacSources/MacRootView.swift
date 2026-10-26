@@ -31,7 +31,11 @@ final class MacNavigation {
     var session: SessionRef?
     /// Who the recording in the "Recording" window is with; nil when none
     /// is in progress. Set it through `requestRecording(with:)`.
-    var recordingPerson: Person?
+    var recordingPerson: Person? {
+        didSet { onRecordingPersonChange?() }
+    }
+    /// Called whenever `recordingPerson` is set (the updater's busy state).
+    @ObservationIgnored var onRecordingPersonChange: (@MainActor () -> Void)?
     /// Identifies the current recording request, so each new recording
     /// starts from fresh window state.
     var recordingID = UUID()

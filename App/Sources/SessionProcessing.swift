@@ -32,6 +32,10 @@ final class ProcessingState {
     /// Held while recording or processing so the Mac doesn't idle-sleep
     /// mid-meeting or mid-inference (the iOS equivalent is the idle timer).
     @ObservationIgnored var keepAwakeActivity: NSObjectProtocol?
+    /// Called after every recording/processing transition, and when a
+    /// summary starts or ends, so the updater can hold its alert and
+    /// relaunch while any of them is under way.
+    @ObservationIgnored var onBusyChange: (@MainActor () -> Void)?
     #endif
 
     func info(for id: UUID) -> Info? { bySession[id] }
@@ -225,6 +229,7 @@ extension Store {
             ProcessInfo.processInfo.endActivity(activity)
             processing.keepAwakeActivity = nil
         }
+        processing.onBusyChange?()
         #endif
     }
 }

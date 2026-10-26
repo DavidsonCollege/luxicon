@@ -9,6 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 swift build                          # debug; -c release for the real thing
 swift test                           # swift-testing; offline, no model downloads
 swift test --filter SyncTests        # single suite (suite names, e.g. VocabularyTests)
+# A bare `swift test` rewrites the root Package.resolved without the Sparkle pin (an Xcode
+# build restores it). Don't commit that: `git checkout Package.resolved`.
 bash scripts/build_mlx_metallib.sh debug   # required once before running the CLI (MLX Metal shaders)
 
 # iOS app (App/ — xcodegen project; the .xcodeproj is generated, never edit it)
@@ -37,9 +39,11 @@ xcodebuild -project Luxicon.xcodeproj -scheme LuxiconMac \
 # Run in Terminal.app — a `!`-prefixed shell can't pass the password:
 #   security set-key-partition-list -S apple-tool:,apple:,codesign: -s ~/Library/Keychains/login.keychain-db
 
-# Mac app release: build, Developer-ID sign, DMG, notarize, staple -> dist/Luxicon-<m>-<b>.dmg
+# Mac app local build: Developer-ID sign, DMG, notarize, staple -> dist/Luxicon-<m>-<b>.dmg
 # (LUXICON_SKIP_NOTARIZE=1 for a signed-only local build that must NOT be published).
-# Read docs/releasing.md Flow 3 first.
+# Releases are tag-driven: push an annotated mac-v<m>-<b> tag and approve the `release`
+# environment; CI builds, publishes and updates the Sparkle appcast. Read docs/releasing.md
+# Flow 3 first.
 scripts/build-mac-app.sh
 
 # Mac sync listener — install ONLY via the script (builds, codesigns, installs to
@@ -74,4 +78,4 @@ Constraints that aren't obvious from any single file:
 - **`~/Luxicon` ownership rule (Mac app):** the library also holds the phone's pushed files. The Mac app never writes over, renames, or deletes a library file unless its envelope has `"source": "mac"` and its `sessionId` matches the session; otherwise it writes beside it (`… (Mac).json`). The file-level logic is LuxiconKit's `LibraryFiles` (tested in `LibraryFilesTests`); `App/MacSources/Store+Library.swift` must go through it.
 - **Wire-protocol changes** (`LuxiconSync`, `SyncPusher`, `SyncListener`) span the app and the installed Mac binary — after changing them, reinstall both sides or pushes fail in confusing ways.
 - **Classic diarization is vendored** in `Sources/LuxiconKit/ClassicDiarization/` (from speech-swift e403d0b) so library bumps can't change speaker separation. On every speech-swift bump, re-verify Parakeet text against a baseline (`luxicon-cli` `--save-diarization`/`--load-diarization`/`--turn-log`) and re-grep the "Portions adapted from" headers that `scripts/generate-notices.sh` tracks.
-- The privacy posture in README.md is load-bearing App Store copy: everything is on-device; the only network features are opt-in Mac sync (LAN-only) and https-only vocabulary/people URL sync. Don't add network calls outside those paths. (User-initiated link-outs that open in Safari — the giving screen's davidson.edu/giving and GitHub links — are fine and deliberate: App Store rule 3.2.1 requires donations to happen outside the app.)
+- The privacy posture in README.md is load-bearing App Store copy: everything is on-device; the only network features are opt-in Mac sync (LAN-only), https-only vocabulary/people URL sync, and the Mac app's Sparkle update check (asks first, sends no profile data; Mac only). Don't add network calls outside those paths. (User-initiated link-outs that open in Safari — the giving screen's davidson.edu/giving and GitHub links — are fine and deliberate: App Store rule 3.2.1 requires donations to happen outside the app.)

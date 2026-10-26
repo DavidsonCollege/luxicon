@@ -43,6 +43,20 @@ import LuxiconKit
 /// - `-printWindowID`: once laid out, print `WINDOW_ID <n>` (the route's
 ///   window; for `onboarding`, the main window under the sheet) to stdout.
 ///
+/// Updater (Sparkle is off in DEBUG unless `-enableUpdater`; run it only in
+/// a build whose bundle id is `edu.davidson.luxicon.mac.updatetest`):
+/// - `-enableUpdater`: start Sparkle.
+/// - `-updateFeedURL <url>`: a scratch appcast instead of `SUFeedURL`.
+/// - `-checkInBackgroundAt <seconds>`: that long after launch, run a
+///   scheduled-path (background) check, as Sparkle's own schedule would.
+/// - `-noRelaunchAfterUpdate`: Sparkle never relaunches the app after an
+///   update (`updaterShouldRelaunchApplication` returns false). Install and
+///   Relaunch then leaves the update staged and it installs when the app
+///   quits; read the new `CFBundleVersion` from disk instead of launching it.
+/// An `.updatetest` build quits at launch without both `-storePath` and
+/// `-libraryPath` (`refuseUpdateTestWithoutScratchPaths`), so Sparkle's
+/// argument-less relaunch never opens the real store or library.
+///
 /// Recording hooks (`-recordWith`, `-noMicrophone`, `-simulate…`,
 /// `-answerPromptWith`, and the picker/mute hooks `-simulateMuteAt`,
 /// `-selectInputNamed`, …) are documented on `DebugRecording`; `-openSettings`
@@ -61,6 +75,7 @@ enum DebugLaunchOptions {
         "-simulateMuteAt": 1, "-simulateUnmuteAt": 1, "-simulateMuteSource": 1, "-simulateStartMuted": 1,
         "-simulateManualOffAt": 1, "-simulateManualResumeAt": 1, "-selectInputNamed": 2,
         "-simulateInputGoneAt": 1, "-simulateUnmuteButtonAt": 1,
+        "-updateFeedURL": 1, "-checkInBackgroundAt": 1,
     ]
 
     /// Flag → its values (empty for a valueless flag).
@@ -94,6 +109,19 @@ enum DebugLaunchOptions {
 
     static func log(_ message: String) {
         FileHandle.standardError.write(Data("[debug] \(message)\n".utf8))
+    }
+
+    /// An `.updatetest` build (the bundle id the updater's end-to-end checks
+    /// use) quits at once unless both `-storePath` and `-libraryPath` are
+    /// given. Sparkle relaunches an updated app without launch arguments,
+    /// and without them a Debug build opens the real store and ~/Luxicon.
+    /// Runs before the Store exists, so nothing real is read or written.
+    static func refuseUpdateTestWithoutScratchPaths() {
+        guard Bundle.main.bundleIdentifier?.hasSuffix(".updatetest") == true,
+              !(has("-storePath") && has("-libraryPath")) else { return }
+        log("updatetest build refused to start: needs -storePath and -libraryPath "
+            + "(build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))")
+        exit(1)
     }
 
     // MARK: - Routes

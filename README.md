@@ -84,7 +84,7 @@ the same `~/Luxicon` library the phone pushes into and the MCP server reads.
   mute button) pauses the recording and nothing is recorded; unmuting resumes it.
 - **Privacy:** same posture as the phone app. Audio and transcripts stay on
   the Mac; the only network traffic is the model downloads and the opt-in
-  features described below.
+  features described below. Luxicon for Mac can check GitHub for new versions. It asks first, and the check sends nothing about you, your people, or your meetings.
 - **Transcription engine:** Settings → Transcription. Optional: Cohere
   Transcribe (Mac only) downloads a 1.6 GB model from Hugging Face when you
   choose it.
@@ -216,6 +216,7 @@ asks first.
   - **Vocabulary / people URL sync** — when you point the app at a vocabulary
     or people-roster file URL, it fetches them (https only, no cross-host
     redirects) when opened.
+  - **Update check (Mac only)** — Luxicon for Mac can check GitHub for new versions. It asks first, and the check sends nothing about you, your people, or your meetings.
 - Export is explicit: you choose what leaves the device, and when.
 
 ## Contributing

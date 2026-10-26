@@ -1,0 +1,307 @@
+# Build, sign, notarize and publish Luxicon for Mac, and update its Sparkle
+# appcast on gh-pages (served at https://davidsoncollege.github.io/luxicon/appcast.xml).
+# Modeled on Oncillascope's release workflow; see docs/releasing.md.
+#
+# Release:  bump App/project.yml, commit, then
+#           git tag -a mac-v<MARKETING_VERSION>-<CURRENT_PROJECT_VERSION> -m "<release notes>"
+#           git push origin <tag>
+#           The tag must match App/project.yml (scripts/check-release-tag.sh); its
+#           annotation becomes the release notes.
+#           Only a pushed mac-v* tag publishes. To retry a failed tag run, re-run
+#           it from the Actions page (a re-run is still a tag push event).
+# Dry run:  Actions > Release Mac app > Run workflow, or `gh workflow run
+#           release-mac.yml`. A manual run is ALWAYS a dry run: it builds, signs,
+#           notarizes and generates the appcast into a temp copy of gh-pages,
+#           then uploads the DMG, appcast.xml and notes as a workflow artifact.
+#           It creates no release or tag and pushes nothing; there is no input
+#           that changes that.
+#
+# BEFORE THE FIRST TAG OR DISPATCH: the `release` environment must exist with
+# JD as required reviewer, admin bypass off, and deployment policies for tags
+# mac-v* and branch main (docs/releasing.md). If it doesn't exist, GitHub
+# creates it on first use with no protection rules, and the job runs without
+# an approval.
+#
+# Secrets:
+#   repo:                 DEVELOPER_ID_P12 / DEVELOPER_ID_P12_PASSWORD (base64 P12 of
+#                         the "Developer ID Application" identity), AC_APPLE_ID /
+#                         AC_TEAM_ID / AC_APP_PASSWORD (notarization). Repo-level,
+#                         shared with the listener workflow.
+#   environment release:  SPARKLE_ED_PRIVATE_KEY (Sparkle EdDSA private key)
+# This job can read none of them until JD approves it: an environment job
+# doesn't start before its required reviewer does.
+name: Release Mac app
+
+on:
+  push:
+    tags: ["mac-v*"]
+  # Always a dry run (no inputs): only a pushed tag publishes.
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create the release, push gh-pages
+
+concurrency:
+  group: release-mac   # never two runs racing on gh-pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash   # bash --noprofile --norc -eo pipefail
+
+jobs:
+  release:
+    runs-on: macos-26
+    # Gated by the environment's required reviewers; holds SPARKLE_ED_PRIVATE_KEY.
+    environment: release
+    env:
+      # 'false' only for a pushed tag (or a re-run of one); every other run,
+      # including any manual dispatch, is a dry run.
+      DRY_RUN: ${{ github.event_name != 'push' }}
+      # Keep in step with Sparkle's exactVersion in App/project.yml. The SHA-256 is
+      # of Sparkle-${SPARKLE_VERSION}.tar.xz from Sparkle's GitHub release; update
+      # both together so the release tooling can't be swapped upstream.
+      SPARKLE_VERSION: "2.10.1"
+      SPARKLE_SHA256: "1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Keep the token out of .git/config while tests and package plugins run;
+          # steps that talk to the remote get GH_TOKEN and `gh auth setup-git`.
+          persist-credentials: false
+
+      - name: Select newest Xcode 26+
+        run: |
+          # mlx-swift needs Swift tools 6.3+ and the app needs the macOS 26 SDK.
+          # Pick the newest installed Xcode >= 26 rather than assuming a path.
+          sel="$(for app in /Applications/Xcode*.app; do
+                   [ -d "$app" ] || continue
+                   v="$("$app/Contents/Developer/usr/bin/xcodebuild" -version 2>/dev/null | awk 'NR==1{print $2}')"
+                   [ -n "$v" ] || continue
+                   printf '%s\t%s\n' "$v" "$app"
+                 done | sort -V | awk -F'\t' '($1+0)>=26{last=$2} END{print last}')"
+          if [ -z "$sel" ]; then
+            echo "No Xcode 26+ found on this runner. Installed Xcodes:" >&2
+            ls -d /Applications/Xcode*.app >&2 || true
+            exit 1
+          fi
+          echo "Selecting $sel"
+          sudo xcode-select -s "$sel"
+          xcodebuild -version
+          swift --version
+
+      - name: Ensure the Metal Toolchain
+        run: |
+          # Xcode compiles MLX's .metal shaders into the app (so
+          # scripts/build_mlx_metallib.sh, which is for SwiftPM CLI builds, isn't
+          # needed), but Xcode 26 ships the Metal Toolchain as a separate component.
+          if xcrun metal --version >/dev/null 2>&1; then
+            echo "Metal Toolchain present"
+          else
+            xcodebuild -downloadComponent MetalToolchain
+            xcrun metal --version
+          fi
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Resolve version and tag
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            # Dispatch: the tag is derived from App/project.yml, for naming only.
+            m="$(sed -nE 's/^[[:space:]]+MARKETING_VERSION:[[:space:]]*"?([0-9][0-9.]*)"?[[:space:]]*$/\1/p' App/project.yml | head -n1)"
+            b="$(sed -nE 's/^[[:space:]]+CURRENT_PROJECT_VERSION:[[:space:]]*"?([0-9]+)"?[[:space:]]*$/\1/p' App/project.yml | head -n1)"
+            TAG="mac-v$m-$b"
+          fi
+          # Refuses a tag that doesn't match App/project.yml.
+          out="$(scripts/check-release-tag.sh "$TAG")"
+          read -r MARKETING BUILD <<<"$out"
+          {
+            echo "TAG=$TAG"
+            echo "MARKETING=$MARKETING"
+            echo "BUILD=$BUILD"
+            echo "DMG=dist/Luxicon-$MARKETING-$BUILD.dmg"
+          } >> "$GITHUB_ENV"
+          echo "Releasing Luxicon for Mac $MARKETING ($BUILD) as $TAG (dry run: $DRY_RUN)"
+
+      - name: Run unit tests
+        run: |
+          swift test
+          # SwiftPM rewrites Package.resolved without the app-only Sparkle pin;
+          # restore it so the release builds from the committed tree.
+          git checkout -- Package.resolved
+
+      - name: Import Developer ID signing identity
+        env:
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain"
+          KPW="$(uuidgen)"
+          security create-keychain -p "$KPW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KPW" "$KEYCHAIN"
+          (umask 077; echo "$DEVELOPER_ID_P12" | base64 -d > "$RUNNER_TEMP/app.p12")
+          security import "$RUNNER_TEMP/app.p12" -k "$KEYCHAIN" \
+            -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/app.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KPW" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          echo "BUILD_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+      - name: Check the Sparkle key is set
+        env:
+          # A boolean, not the key: the key itself is only written to disk after
+          # the build, so the build and its package plugins never see it.
+          HAS_SPARKLE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY != '' }}
+        run: |
+          if [ "$HAS_SPARKLE_KEY" != "true" ]; then
+            echo "SPARKLE_ED_PRIVATE_KEY is empty: set it on the 'release' environment." >&2
+            exit 1
+          fi
+
+      - name: Fetch Sparkle tools
+        run: |
+          pinned="$(awk '/^  Sparkle:/{s=1} s && /exactVersion:/{gsub(/"/, "", $2); print $2; exit}' App/project.yml)"
+          if [ "$pinned" != "$SPARKLE_VERSION" ]; then
+            echo "SPARKLE_VERSION $SPARKLE_VERSION doesn't match Sparkle's exactVersion '$pinned' in App/project.yml" >&2
+            exit 1
+          fi
+          dir="$RUNNER_TEMP/sparkle"
+          mkdir -p "$dir"
+          curl -fsSL -o "$RUNNER_TEMP/sparkle.tar.xz" \
+            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          echo "${SPARKLE_SHA256}  $RUNNER_TEMP/sparkle.tar.xz" | shasum -a 256 -c -
+          tar -xf "$RUNNER_TEMP/sparkle.tar.xz" -C "$dir"
+          [ -x "$dir/bin/generate_appcast" ] || { echo "generate_appcast missing from the Sparkle tools" >&2; exit 1; }
+          echo "SPARKLE_BIN=$dir/bin" >> "$GITHUB_ENV"
+
+      - name: Build, sign, notarize (app and DMG)
+        env:
+          AC_APPLE_ID: ${{ secrets.AC_APPLE_ID }}
+          AC_TEAM_ID: ${{ secrets.AC_TEAM_ID }}
+          AC_APP_PASSWORD: ${{ secrets.AC_APP_PASSWORD }}
+        run: |
+          scripts/build-mac-app.sh
+          [ -f "$DMG" ] || { echo "expected $DMG" >&2; exit 1; }
+          shasum -a 256 "$DMG"
+
+      - name: Release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          : > "$NOTES"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            # actions/checkout can leave a lightweight copy of an annotated tag;
+            # fetch the tag object itself to read its message.
+            gh auth setup-git
+            git fetch --force --no-tags origin "refs/tags/$TAG:refs/tags/$TAG"
+            if [ "$(git cat-file -t "refs/tags/$TAG")" = "tag" ]; then
+              # Subject and body only: leaves out any tag signature.
+              git for-each-ref --format='%(contents:subject)%0a%0a%(contents:body)' "refs/tags/$TAG" > "$NOTES"
+            fi
+          fi
+          if ! grep -q '[^[:space:]]' "$NOTES"; then
+            echo "Luxicon for Mac $MARKETING ($BUILD)" > "$NOTES"
+          fi
+          echo "NOTES=$NOTES" >> "$GITHUB_ENV"
+          cat "$NOTES"
+
+      - name: Check out gh-pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A worktree in RUNNER_TEMP. On a dry run it's only a temp copy: nothing
+          # below commits or pushes unless this is a tag push.
+          PAGES="$RUNNER_TEMP/pages"
+          gh auth setup-git
+          rc=0
+          git ls-remote --exit-code --heads origin gh-pages >/dev/null || rc=$?
+          case "$rc" in
+            0)
+              git fetch --no-tags --depth 1 origin "+refs/heads/gh-pages:refs/remotes/origin/gh-pages"
+              git worktree add -B gh-pages "$PAGES" origin/gh-pages
+              ;;
+            2)
+              echo "No gh-pages branch yet; starting an orphan one."
+              git worktree add --orphan -b gh-pages "$PAGES"
+              ;;
+            *)
+              echo "git ls-remote failed ($rc)" >&2
+              exit 1
+              ;;
+          esac
+          echo "PAGES=$PAGES" >> "$GITHUB_ENV"
+
+      - name: Write the Sparkle signing key
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          # Passed to generate_appcast with --ed-key-file; lives only in RUNNER_TEMP
+          # and is deleted by the cleanup step.
+          umask 077
+          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle_ed_key"
+          echo "ED_KEY_FILE=$RUNNER_TEMP/sparkle_ed_key" >> "$GITHUB_ENV"
+
+      - name: Generate appcast
+        run: |
+          DMG_PATH="$DMG" \
+          RELEASE_NOTES_MD="$NOTES" \
+          SPARKLE_BIN="$SPARKLE_BIN" \
+          ED_KEY_FILE="$ED_KEY_FILE" \
+          DOWNLOAD_URL_PREFIX="https://github.com/DavidsonCollege/luxicon/releases/download/$TAG/" \
+          PAGES_DIR="$PAGES" \
+          bash scripts/make-appcast.sh
+          rm -f "$ED_KEY_FILE"
+          out="$RUNNER_TEMP/release-artifact"
+          mkdir -p "$out"
+          cp "$DMG" "$PAGES/appcast.xml" "$PAGES/release-notes/Luxicon-$MARKETING-$BUILD.html" "$out/"
+
+      - name: Upload build and appcast
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: luxicon-mac-${{ env.TAG }}${{ env.DRY_RUN == 'true' && '-dry-run' || '' }}
+          path: ${{ runner.temp }}/release-artifact/
+          if-no-files-found: error
+          retention-days: 14
+
+      # Publishing runs only for a pushed mac-v* tag. The event check repeats
+      # DRY_RUN on purpose, so no manual run can reach these two steps.
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/mac-v') && env.DRY_RUN == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The pushed tag must already exist; this never creates one.
+          gh release create "$TAG" "$DMG" \
+            --title "Luxicon for Mac $MARKETING ($BUILD)" \
+            --notes-file "$NOTES" --verify-tag
+
+      - name: Publish appcast to gh-pages
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/mac-v') && env.DRY_RUN == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git -C "$PAGES" add appcast.xml release-notes
+          if git -C "$PAGES" diff --cached --quiet; then
+            echo "The appcast didn't change; nothing to publish." >&2
+            exit 1
+          fi
+          git -C "$PAGES" -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Appcast: $TAG"
+          # Push from the main checkout: the worktree shares its refs and remote.
+          gh auth setup-git
+          git push origin gh-pages
+
+      - name: Clean up signing material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/sparkle_ed_key" "$RUNNER_TEMP/app.p12"
+          if [ -n "${BUILD_KEYCHAIN:-}" ]; then
+            security delete-keychain "$BUILD_KEYCHAIN" || true
+          fi

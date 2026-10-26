@@ -7,32 +7,36 @@
 #           git push origin <tag>
 #           The tag must match App/project.yml (scripts/check-release-tag.sh); its
 #           annotation becomes the release notes.
-# Dry run:  Actions > Release Mac app > Run workflow (dry_run defaults to true).
-#           Builds, signs, notarizes and generates the appcast into a temp copy of
-#           gh-pages, then uploads the DMG, appcast.xml and notes as a workflow
-#           artifact. It creates no release or tag and pushes nothing.
+#           Only a pushed mac-v* tag publishes. To retry a failed tag run, re-run
+#           it from the Actions page (a re-run is still a tag push event).
+# Dry run:  Actions > Release Mac app > Run workflow, or `gh workflow run
+#           release-mac.yml`. A manual run is ALWAYS a dry run: it builds, signs,
+#           notarizes and generates the appcast into a temp copy of gh-pages,
+#           then uploads the DMG, appcast.xml and notes as a workflow artifact.
+#           It creates no release or tag and pushes nothing; there is no input
+#           that changes that.
 #
 # BEFORE THE FIRST TAG OR DISPATCH: the `release` environment must exist with
-# required reviewers (Settings > Environments). If it doesn't, GitHub creates it
-# on first use with no protection rules, and the job (with the signing,
-# notarization and Sparkle secrets) runs without an approval.
+# JD as required reviewer, admin bypass off, and deployment policies for tags
+# mac-v* and branch main (docs/releasing.md). If it doesn't exist, GitHub
+# creates it on first use with no protection rules, and the job runs without
+# an approval.
 #
 # Secrets:
 #   repo:                 DEVELOPER_ID_P12 / DEVELOPER_ID_P12_PASSWORD (base64 P12 of
 #                         the "Developer ID Application" identity), AC_APPLE_ID /
-#                         AC_TEAM_ID / AC_APP_PASSWORD (notarization)
+#                         AC_TEAM_ID / AC_APP_PASSWORD (notarization). Repo-level,
+#                         shared with the listener workflow.
 #   environment release:  SPARKLE_ED_PRIVATE_KEY (Sparkle EdDSA private key)
+# This job can read none of them until JD approves it: an environment job
+# doesn't start before its required reviewer does.
 name: Release Mac app
 
 on:
   push:
     tags: ["mac-v*"]
+  # Always a dry run (no inputs): only a pushed tag publishes.
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Dry run: build, sign and generate the appcast, but publish nothing"
-        type: boolean
-        default: true
 
 permissions:
   contents: write   # create the release, push gh-pages
@@ -51,8 +55,9 @@ jobs:
     # Gated by the environment's required reviewers; holds SPARKLE_ED_PRIVATE_KEY.
     environment: release
     env:
-      # 'true' only for a dispatch with dry_run checked; a tag push always publishes.
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      # 'false' only for a pushed tag (or a re-run of one); every other run,
+      # including any manual dispatch, is a dry run.
+      DRY_RUN: ${{ github.event_name != 'push' }}
       # Keep in step with Sparkle's exactVersion in App/project.yml. The SHA-256 is
       # of Sparkle-${SPARKLE_VERSION}.tar.xz from Sparkle's GitHub release; update
       # both together so the release tooling can't be swapped upstream.
@@ -211,7 +216,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # A worktree in RUNNER_TEMP. On a dry run it's only a temp copy: nothing
-          # below commits or pushes unless DRY_RUN is false.
+          # below commits or pushes unless this is a tag push.
           PAGES="$RUNNER_TEMP/pages"
           gh auth setup-git
           rc=0
@@ -264,33 +269,20 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      # Publishing runs only for a pushed mac-v* tag. The event check repeats
+      # DRY_RUN on purpose, so no manual run can reach these two steps.
       - name: Create GitHub Release
-        if: env.DRY_RUN != 'true'
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/mac-v') && env.DRY_RUN == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            where=(--verify-tag)
-          else
-            # Dispatch: create the tag at the commit that was built, and refuse if
-            # it already exists anywhere else.
-            gh auth setup-git
-            # An annotated tag lists its tag object and, as ^{}, the commit it tags.
-            refs="$(git ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}")"
-            existing="$(awk '$2 ~ /\^\{\}$/{print $1; exit}' <<<"$refs")"
-            [ -n "$existing" ] || existing="$(awk 'NR==1{print $1}' <<<"$refs")"
-            if [ -n "$existing" ] && [ "$existing" != "$GITHUB_SHA" ]; then
-              echo "Tag $TAG already exists at $existing, not the built commit $GITHUB_SHA." >&2
-              exit 1
-            fi
-            where=(--target "$GITHUB_SHA")
-          fi
+          # The pushed tag must already exist; this never creates one.
           gh release create "$TAG" "$DMG" \
             --title "Luxicon for Mac $MARKETING ($BUILD)" \
-            --notes-file "$NOTES" "${where[@]}"
+            --notes-file "$NOTES" --verify-tag
 
       - name: Publish appcast to gh-pages
-        if: env.DRY_RUN != 'true'
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/mac-v') && env.DRY_RUN == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

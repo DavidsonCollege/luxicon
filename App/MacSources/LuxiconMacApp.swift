@@ -50,6 +50,11 @@ struct LuxiconMacApp: App {
 /// (and a pending store load retried) whether or not a window is open.
 @MainActor
 final class MacAppDelegate: NSObject, NSApplicationDelegate {
+    #if DEBUG
+    // Must stay the first stored property: properties initialize in
+    // declaration order, so this runs before Store() reads anything.
+    private let updateTestGuard: Void = DebugLaunchOptions.refuseUpdateTestWithoutScratchPaths()
+    #endif
     let store = Store()
     let library = LibraryIndex()
     let navigation = MacNavigation()

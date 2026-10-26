@@ -91,4 +91,10 @@ extension MacUpdater: SPUStandardUserDriverDelegate {
             !deferral.holdIfBusy { [weak self] in self?.controller.updater.checkForUpdates() }
         }
     }
+
+    /// Required when the method above returns false; nothing to do here,
+    /// since the held `checkForUpdates()` does the showing once idle.
+    nonisolated func standardUserDriverWillHandleShowingUpdate(
+        _ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState
+    ) {}
 }

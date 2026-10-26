@@ -16,7 +16,7 @@ There are three release surfaces:
 |---|---|---|
 | iOS app → TestFlight / App Store | `xcodebuild archive` + `-exportArchive` with `destination: upload` | Xcode's logged-in Apple account session |
 | Mac listener installer → GitHub Releases | push a `listener-v*` tag (CI), or `scripts/build-installer.sh` locally | Developer ID certs + notary profile (local) / repo secrets (CI) |
-| Mac app (DMG) → GitHub Releases | `scripts/build-mac-app.sh` locally, then `gh release create mac-v<m>-<b>` | Developer ID Application identity + `luxicon` notary profile |
+| Mac app (DMG) → GitHub Releases + Sparkle appcast | push a `mac-v*` tag (CI, approved on the `release` environment); `scripts/build-mac-app.sh` for local unpublished builds | repo secrets + `release` environment secret (CI) / Developer ID Application identity + `luxicon` notary profile (local) |
 
 ---
 
@@ -28,7 +28,9 @@ There are three release surfaces:
 | "Developer ID Application" identity | login keychain | signs the listener binary and the Mac app + DMG | On W230033 the key ACL already trusts `codesign` (signs non-interactively). On a new Mac run the one-time `security set-key-partition-list` step (Flow 3) first. |
 | "Developer ID Installer" identity | login keychain | signs the installer pkg | Only the Apple **Account Holder** can mint these; JD is not the Account Holder. `.p12` backups of both live in `~/Downloads/Davidson Apple Developer ID {Application,Installer}.p12` (passwords: ask JD — never write them down here). |
 | Notarization credentials | keychain profile named **`luxicon`** (`xcrun notarytool … --keychain-profile luxicon`) | notarizing the installer pkg and the Mac app DMG | Backed by an app-specific password on jdmills@davidson.edu; validated against Apple 2026-07-09. Rotate at appleid.apple.com → update the profile AND the repo secret. |
-| GitHub Actions secrets on `DavidsonCollege/luxicon` | repo → Settings → Secrets | CI listener releases | `AC_APPLE_ID`, `AC_TEAM_ID`, `AC_APP_PASSWORD` (notarization); `DEVELOPER_ID_P12`(+`_PASSWORD`) and `INSTALLER_ID_P12`(+`_PASSWORD`) (signing). Write-only; set with `gh secret set`. |
+| GitHub Actions secrets on `DavidsonCollege/luxicon` | repo → Settings → Secrets | CI listener releases | `AC_APPLE_ID`, `AC_TEAM_ID`, `AC_APP_PASSWORD` (notarization); `DEVELOPER_ID_P12`(+`_PASSWORD`) and `INSTALLER_ID_P12`(+`_PASSWORD`) (signing). Write-only; set with `gh secret set`. The Mac app workflow reuses `DEVELOPER_ID_P12`(+`_PASSWORD`) and the `AC_*` three. |
+| Sparkle EdDSA signing key (Mac app updates) | private key: login keychain, account **`edu.davidson.luxicon.mac`** (never the default account, which may hold another app's key); CI copy: environment secret **`SPARKLE_ED_PRIVATE_KEY`** on the `release` environment (not a repo secret) | signing the appcast (`scripts/make-appcast.sh`) | Public half is `SUPublicEDKey` in `App/project.yml` (public by design). Never write the private key anywhere in the repo or a log. |
+| `release` environment on `DavidsonCollege/luxicon` | repo → Settings → Environments | gates the Mac app release job; holds `SPARKLE_ED_PRIVATE_KEY` | Required reviewer: JD. The job waits for his approval click. |
 
 Traps that have burned agents before:
 
@@ -164,25 +166,112 @@ to the code signature, and ad-hoc rebuilds get silently re-blocked
 
 ---
 
-## Flow 3: Mac app (DMG) → GitHub Releases
+## Flow 3: Mac app (DMG) → GitHub Releases + Sparkle appcast
+
+Tag → approve → published. `.github/workflows/release-mac.yml` ("Release Mac
+app") does the build, signing, notarization, GitHub Release and appcast
+update; Luxicon for Mac then offers the new version to people who have the
+updater (see "First release" below).
+
+**Publishing needs JD's explicit go-ahead.** Agents prepare the bump and
+verify; they do not push a `mac-v*` tag, enable Pages, create the
+environment, push `gh-pages` or set secrets on their own.
+
+### 1. Bump and tag
+
+Bump `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `App/project.yml`
+(single version train shared with iOS), run `cd App && xcodegen generate`,
+commit, then tag the commit. The tag is `mac-v<marketing>-<build>` and must
+match `App/project.yml` (`scripts/check-release-tag.sh`; the workflow refuses
+a mismatch). The annotated tag message is the release notes, shown in
+Sparkle's update window and on the GitHub Release (Markdown):
+
+```bash
+git tag -a mac-v1.0-19 -m "Fixes a crash when muting mid-recording.
+
+- Cohere Transcribe is now available in Settings."
+git push origin mac-v1.0-19
+```
+
+A lightweight tag works but leaves the notes as a one-line default.
+
+### 2. Approve
+
+The job runs in the **`release`** environment, which requires JD's approval
+(Actions → the run → Review deployments → Approve). Nothing is built, and
+the signing and Sparkle secrets stay unavailable, until he clicks.
+The environment must exist with required reviewers before the first tag or
+dispatch: if it doesn't, GitHub creates it on first use with no protection
+and the job runs unapproved.
+
+### 3. What the workflow does
+
+On `macos-26`: checks the tag against `App/project.yml`; runs `swift test`
+(then restores `Package.resolved`); imports the Developer ID identity from
+the repo secrets; fetches Sparkle's tools pinned by version and SHA-256 (the
+pin in the workflow must match `exactVersion` in `App/project.yml`); runs
+`scripts/build-mac-app.sh` with notarization credentials from the `AC_*`
+secrets; builds the release notes from the tag; runs
+`scripts/make-appcast.sh` against a checkout of `gh-pages`; uploads the DMG,
+`appcast.xml` and notes as a workflow artifact (kept 14 days); creates the
+GitHub Release with the DMG; and pushes the new appcast and
+`release-notes/` page to `gh-pages`, served at
+`https://davidsoncollege.github.io/luxicon/appcast.xml`.
+
+`scripts/make-appcast.sh` keeps every earlier version in the feed and
+refuses to publish if the new feed has fewer items, drops any
+`sparkle:version`, has no enclosure, or points an enclosure outside
+`https://github.com/DavidsonCollege/luxicon/releases/download/`.
+
+### Dry run
+
+```bash
+gh workflow run release-mac.yml -f dry_run=true
+```
+
+(or Actions → Release Mac app → Run workflow; `dry_run` defaults to true).
+Still needs the environment approval. Builds, signs, notarizes and generates
+the appcast into a temporary copy of `gh-pages`, then uploads the DMG,
+appcast and notes as the `luxicon-mac-<tag>-dry-run` artifact. It creates no
+release or tag and pushes nothing. A tag push always publishes.
+
+### If a run fails
+
+- **Before "Create GitHub Release":** nothing is published; fix and re-push
+  (move the tag as in Flow 2) or dispatch again.
+- **The run created the GitHub Release but the `gh-pages` push failed:**
+  re-running the tag then fails at `gh release create` because the release
+  exists. Either (a) publish the appcast by hand from the run's uploaded
+  artifact `luxicon-mac-<tag>` (14-day retention): `gh run download <run-id>
+  -n luxicon-mac-<tag>`, check out `gh-pages`, copy in `appcast.xml` and
+  `release-notes/Luxicon-<m>-<b>.html` (into `release-notes/`), commit
+  `Appcast: <tag>` and push; or (b) delete the release and re-run:
+  `gh release delete <tag> --cleanup-tag=false` (keeps the tag), then
+  re-run the failed workflow run from the Actions page. Prefer (a) if the release is already
+  public: (b) rebuilds the DMG, so it replaces the one people may have
+  downloaded.
+- If `gh-pages` shows no change ("The appcast didn't change"), the version is
+  already in the feed; check what was published before retrying.
+
+### Local, unpublished builds
 
 ```bash
 scripts/build-mac-app.sh
 ```
 
-Runs xcodegen, archives the `LuxiconMac` scheme (arm64 only), exports with
+Stays for local testing and for CI to call. Runs xcodegen, archives the
+`LuxiconMac` scheme (arm64 only), exports with
 `packaging/mac-export-options.plist`, verifies the signature, the
-`audio-input` entitlement, and that the MLX `*.metallib` made it into the
-app's Resources, then notarizes and staples the **app** (zipped with
-`ditto`), so a copy dragged out of the DMG validates offline. Then it builds
+`audio-input` entitlement, Sparkle's nested helpers (hardened runtime,
+Developer ID authority) and that the MLX `*.metallib` made it into the app's
+Resources, then notarizes and staples the **app** (zipped with `ditto`), so
+a copy dragged out of the DMG validates offline. Then it builds
 `dist/Luxicon-<marketing>-<build>.dmg` (app + Applications symlink), signs
-the DMG, notarizes and staples it too, and Gatekeeper-checks both the DMG
-and the app inside it. Expected final output: `accepted / source=Notarized
-Developer ID` for both. It warns (doesn't fail) on a dirty git tree: a
-release should be built from a committed state. Bump `MARKETING_VERSION` /
-`CURRENT_PROJECT_VERSION` in `App/project.yml` first.
+the DMG, notarizes and staples it too, and Gatekeeper-checks both. Expected
+final output: `accepted / source=Notarized Developer ID` for both. It warns
+(doesn't fail) on a dirty git tree.
 
-Credentials it uses (locations only):
+Locally it uses (locations only):
 
 - **"Developer ID Application" identity** in the login keychain. The
   LuxiconMac target signs it manually (team `4Z539UE4TT`, no provisioning
@@ -199,18 +288,44 @@ Credentials it uses (locations only):
 `LUXICON_SKIP_NOTARIZE=1 scripts/build-mac-app.sh` produces a signed but
 NOT notarized DMG for local testing. Never publish that one.
 
-Tag format: `mac-v<marketing>-<build>` (e.g. `mac-v1.0-17`), kept distinct
-from `listener-v*`. Publish manually:
-`gh release create mac-v1.0-17 dist/Luxicon-1.0-17.dmg`.
-
-**Publishing a GitHub release needs JD's explicit go-ahead.** Agents build
-and verify; they do not create the release or push the tag on their own.
-
 If export fails with `Failed to Use Accounts`, see the trap above (that is
 the Xcode account session; unexpected for this flow since signing is manual,
 so stop and report).
 
----
+### Sparkle signing key
+
+- **Private key:** JD's login keychain, account `edu.davidson.luxicon.mac`.
+  `scripts/make-appcast.sh` reads it from there when run locally (no
+  `ED_KEY_FILE`). Always pass `--account edu.davidson.luxicon.mac` to
+  Sparkle's `generate_keys` / `generate_appcast`; the default account may
+  hold another app's key.
+- **CI copy:** environment secret `SPARKLE_ED_PRIVATE_KEY` on `release`.
+  The workflow writes it to a temp file only after the build and deletes it
+  at the end.
+- **Public key:** `SUPublicEDKey` in `App/project.yml`.
+
+**Rotating the key.** Installed apps only accept updates signed by the
+public key they carry, so rotate in two releases:
+
+1. Generate a new pair under a new keychain account (`generate_keys
+   --account <new>`); set the new public key as `SUPublicEDKey` in
+   `App/project.yml`.
+2. Ship a release carrying the new public key, still signed with the OLD
+   private key (the old secret stays in `SPARKLE_ED_PRIVATE_KEY` for this
+   run). Sparkle accepts it because the old key signed it, and installed
+   apps now hold the new key.
+3. Replace `SPARKLE_ED_PRIVATE_KEY` on `release` with the new private key
+   (set from a temporary export, then delete the export), and update
+   `KEYCHAIN_ACCOUNT` in `scripts/make-appcast.sh` to the new account.
+   Later releases are signed with the new key.
+4. Keep the old key until nobody is expected to update from a build that
+   predates the rotation.
+
+### First release (build 19)
+
+Build 18 has no updater. People on it download build 19 once by hand from
+the GitHub Releases page; from then on updates arrive in-app. The
+`mac-v1.0-18` release and tag stay as they are.
 
 ## Device installs (testing, not a release)
 

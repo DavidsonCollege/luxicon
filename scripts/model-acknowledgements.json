@@ -27,6 +27,13 @@
       "license": "NVIDIA Open Model License",
       "url": "https://huggingface.co/aufklarer/Parakeet-EOU-120M-CoreML-INT8",
       "copyright": "© NVIDIA Corporation (nvidia/parakeet_realtime_eou_120m-v1). Converted to CoreML by the speech-swift project. License: https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/"
+    },
+    {
+      "name": "Cohere Transcribe 03-2026 (Mac only)",
+      "version": null,
+      "license": "Apache-2.0",
+      "url": "https://huggingface.co/CohereLabs/cohere-transcribe-03-2026",
+      "copyright": "© Cohere (CohereLabs/cohere-transcribe-03-2026). MLX conversion (aufklarer/Cohere-Transcribe-2B-MLX-5bit) by the speech-swift project."
     }
   ]
 }

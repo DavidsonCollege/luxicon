@@ -9,6 +9,13 @@ public protocol TurnTranscriber: AnyObject {
     /// Whether `context` is honored (decoder-level vocabulary biasing).
     var supportsContext: Bool { get }
     func transcribeTurn(_ audio: [Float], sampleRate: Int, context: [String]?) -> TranscriptionResult
+    /// Engine-specific cleanup of one turn's trimmed text, given the diarized
+    /// turn's duration (seconds, without ASR padding). Default: unchanged.
+    func filterTurnText(_ text: String, turnDuration: Double) -> String
+}
+
+public extension TurnTranscriber {
+    func filterTurnText(_ text: String, turnDuration: Double) -> String { text }
 }
 
 /// Parakeet TDT (CoreML, Neural Engine). Fast and battery-friendly; no
@@ -28,6 +35,9 @@ public enum ASREngine: String, Codable, Sendable {
     case parakeet
     /// Apple SpeechTranscriber — system model, out-of-process, iOS 26+.
     case appleSpeech
+    /// Cohere Transcribe 03-2026 — 2B MLX model (INT5), macOS only. Exists on
+    /// every platform so a synced/persisted choice decodes; unavailable on iOS.
+    case cohere
 
     /// Tolerant decode: an engine persisted by an older build (e.g. the
     /// retired "qwen3") falls back to the default instead of failing the
@@ -50,6 +60,29 @@ public enum ASREngine: String, Codable, Sendable {
     /// Testable seam for `resolvedDefault()`.
     public static func resolvedDefault(appleSpeechAvailable: Bool) -> ASREngine {
         appleSpeechAvailable ? .appleSpeech : .parakeet
+    }
+
+    /// Whether this platform can run the engine at all. Cohere is linked for
+    /// macOS only. (Apple Speech's OS gate is checked at load time, where it
+    /// throws `EngineUnavailableError` and the app falls back.)
+    public var isAvailable: Bool {
+        switch self {
+        case .parakeet, .appleSpeech: return true
+        case .cohere:
+            #if os(macOS)
+            return true
+            #else
+            return false
+            #endif
+        }
+    }
+
+    /// The engine to run for a user's choice: the choice itself when this
+    /// platform supports it, else the automatic default — so a `cohere`
+    /// choice read on iOS never fails a session or picks Parakeet by accident.
+    public static func resolved(_ choice: ASREngine?) -> ASREngine {
+        guard let choice, choice.isAvailable else { return resolvedDefault() }
+        return choice
     }
 }
 
@@ -80,7 +113,7 @@ public struct TranscriptionEmptyError: Error, LocalizedError {
 /// All inference is synchronous and CPU/GPU/ANE-bound; call `process` from a
 /// background task. The class is not thread-safe — use one instance per task.
 public final class MeetingPipeline {
-    public let diarizer: PyannoteDiarizationPipeline
+    public let diarizer: any SpeakerDiarizer
     public let asr: any TurnTranscriber
 
     /// Sample rate `process` expects. Load or record audio at this rate.
@@ -121,7 +154,7 @@ public final class MeetingPipeline {
         public static let oneOnOne = Options()
     }
 
-    public init(diarizer: PyannoteDiarizationPipeline, asr: any TurnTranscriber) {
+    public init(diarizer: any SpeakerDiarizer, asr: any TurnTranscriber) {
         self.diarizer = diarizer
         self.asr = asr
     }
@@ -129,11 +162,12 @@ public final class MeetingPipeline {
     /// Download (first run) and load both models.
     public static func load(
         engine: ASREngine = .parakeet,
+        diarization: DiarizationMethod = .default,
         progress: (@Sendable (Double, String) -> Void)? = nil
     ) async throws -> MeetingPipeline {
-        let diarizer = try await DiarizationPipeline.fromPretrained(progressHandler: { p, stage in
+        let diarizer = try await loadDiarizer(method: diarization) { p, stage in
             progress?(p * 0.5, stage)
-        })
+        }
         let asr: any TurnTranscriber
         switch engine {
         case .parakeet:
@@ -148,8 +182,30 @@ public final class MeetingPipeline {
             asr = try await AppleSpeechTranscriber.load { p, stage in
                 progress?(0.5 + p * 0.5, stage)
             }
+        case .cohere:
+            #if os(macOS)
+            asr = try await CohereTurnTranscriber.load { p, stage in
+                progress?(0.5 + p * 0.5, stage)
+            }
+            #else
+            throw EngineUnavailableError(reason: "Cohere Transcribe is available on Mac only")
+            #endif
         }
         return MeetingPipeline(diarizer: diarizer, asr: asr)
+    }
+
+    /// Download (first run) and load the diarizer `load` uses. The CLI's
+    /// --diarize-only goes through here too, so it can't diverge from the app.
+    public static func loadDiarizer(
+        method: DiarizationMethod = .default,
+        progress: (@Sendable (Double, String) -> Void)? = nil
+    ) async throws -> any SpeakerDiarizer {
+        switch method {
+        case .classic:
+            return try await ClassicDiarizationPipeline.load(progress: progress)
+        case .pyannoteV2(let threshold):
+            return try await PyannoteV2Diarizer.load(threshold: threshold, progress: progress)
+        }
     }
 
     /// Extract a speaker embedding from ~10s of one person talking.
@@ -166,6 +222,8 @@ public final class MeetingPipeline {
     ///     Injected as decoder context on context-capable engines, and applied
     ///     as a post-ASR near-miss correction on every engine.
     ///   - progress: (0–1, stage description); checked between turns for Task cancellation
+    ///   - precomputedDiarization: skip diarization and use this result (A/B tooling)
+    ///   - onTurn: called for every transcribed turn, including ones whose text is empty
     public func process(
         audio: [Float],
         title: String,
@@ -173,7 +231,9 @@ public final class MeetingPipeline {
         enrollments: [VoiceEnrollment] = [],
         vocabulary: [VocabularyEntry] = [],
         options: Options = .oneOnOne,
-        progress: ((Double, String) -> Void)? = nil
+        progress: ((Double, String) -> Void)? = nil,
+        precomputedDiarization: DiarizationResult? = nil,
+        onTurn: ((TurnRecord) -> Void)? = nil
     ) throws -> MeetingTranscript {
         let sr = Self.sampleRate
         let duration = Double(audio.count) / Double(sr)
@@ -188,7 +248,9 @@ public final class MeetingPipeline {
         defer { MLX.Memory.clearCache() }
 
         // 1. Diarize (≈ first 60% of the work)
-        var result = diarizer.diarize(audio: audio, sampleRate: sr, config: options.diarization) { p, stage in
+        var result = precomputedDiarization ?? diarizer.diarize(
+            audio: audio, sampleRate: sr, config: options.diarization
+        ) { p, stage in
             progress?(Double(p) * 0.6, stage)
             return !Task.isCancelled
         }
@@ -201,30 +263,9 @@ public final class MeetingPipeline {
         let turnSpans = Self.buildTurns(segments: result.segments, mergeGap: options.turnMergeGap)
 
         // 4. Transcribe each turn
-        let context = asr.supportsContext ? VocabularyCorrector.contextTerms(for: vocabulary) : nil
-        var turns: [TranscriptTurn] = []
-        turns.reserveCapacity(turnSpans.count)
-        for (i, span) in turnSpans.enumerated() {
-            try Task.checkCancellation()
-            progress?(0.6 + 0.4 * Double(i) / Double(max(turnSpans.count, 1)),
-                      "Transcribing turn \(i + 1)/\(turnSpans.count)")
-            let lo = max(0, Int((span.start - options.asrPadding) * Double(sr)))
-            let hi = min(audio.count, Int((span.end + options.asrPadding) * Double(sr)))
-            guard hi > lo else { continue }
-            let slice = Array(audio[lo..<hi])
-            let asrResult = Self.transcribeBounded(slice, asr: asr, sampleRate: sr, context: context)
-            var text = asrResult.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            text = VocabularyCorrector.correct(text, entries: vocabulary)
-            guard !text.isEmpty else { continue }
-            turns.append(TranscriptTurn(
-                id: turns.count,
-                speakerId: span.speakerId,
-                start: span.start,
-                end: span.end,
-                text: text,
-                confidence: asrResult.confidence
-            ))
-        }
+        let turns = try transcribeTurns(
+            turnSpans, audio: audio, vocabulary: vocabulary, options: options,
+            progress: progress, onTurn: onTurn)
 
         try Self.checkTranscriptionYield(turns: turns, spans: turnSpans)
 
@@ -239,6 +280,49 @@ public final class MeetingPipeline {
         }
         progress?(1.0, "Done")
         return transcript
+    }
+
+    /// Step 4 of `process`: transcribe each turn span (padded by
+    /// `options.asrPadding`), apply the engine's `filterTurnText` on the
+    /// unpadded span duration, then vocabulary correction. Empty turns are
+    /// reported to `onTurn` but dropped from the result. No MLX use, so
+    /// tests can drive it without a Metal library.
+    func transcribeTurns(
+        _ turnSpans: [TurnSpan],
+        audio: [Float],
+        vocabulary: [VocabularyEntry],
+        options: Options,
+        progress: ((Double, String) -> Void)? = nil,
+        onTurn: ((TurnRecord) -> Void)? = nil
+    ) throws -> [TranscriptTurn] {
+        let sr = Self.sampleRate
+        let context = asr.supportsContext ? VocabularyCorrector.contextTerms(for: vocabulary) : nil
+        var turns: [TranscriptTurn] = []
+        turns.reserveCapacity(turnSpans.count)
+        for (i, span) in turnSpans.enumerated() {
+            try Task.checkCancellation()
+            progress?(0.6 + 0.4 * Double(i) / Double(max(turnSpans.count, 1)),
+                      "Transcribing turn \(i + 1)/\(turnSpans.count)")
+            let lo = max(0, Int((span.start - options.asrPadding) * Double(sr)))
+            let hi = min(audio.count, Int((span.end + options.asrPadding) * Double(sr)))
+            guard hi > lo else { continue }
+            let slice = Array(audio[lo..<hi])
+            let asrResult = Self.transcribeBounded(slice, asr: asr, sampleRate: sr, context: context)
+            var text = asrResult.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            text = asr.filterTurnText(text, turnDuration: span.end - span.start)
+            text = VocabularyCorrector.correct(text, entries: vocabulary)
+            onTurn?(TurnRecord(start: span.start, end: span.end, speakerId: span.speakerId, text: text))
+            guard !text.isEmpty else { continue }
+            turns.append(TranscriptTurn(
+                id: turns.count,
+                speakerId: span.speakerId,
+                start: span.start,
+                end: span.end,
+                text: text,
+                confidence: asrResult.confidence
+            ))
+        }
+        return turns
     }
 
     // MARK: - Bounded transcription
@@ -348,6 +432,17 @@ public final class MeetingPipeline {
             }
         }
         return turns
+    }
+
+    /// Diarize + cap exactly as `process` does (same MLX cache bound), for the
+    /// CLI's --diarize-only.
+    public static func diarizeOnly(
+        _ diarizer: any SpeakerDiarizer, audio: [Float], options: Options = .oneOnOne
+    ) -> DiarizationResult {
+        MLX.Memory.cacheLimit = min(MLX.Memory.cacheLimit, gpuCacheLimit)
+        defer { MLX.Memory.clearCache() }
+        let result = diarizer.diarize(audio: audio, sampleRate: sampleRate, config: options.diarization)
+        return capSpeakers(result, to: options.maxSpeakers)
     }
 
     /// Keep the `max` speakers with the most talk time; reassign the rest to the

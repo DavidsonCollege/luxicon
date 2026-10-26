@@ -1,5 +1,5 @@
 {
-  "originHash" : "357a56ef7335822f8cb2a0149b6db734aed301bb79d97529aea609fdc924a359",
+  "originHash" : "2f67149210ba85657dc1cf638187a2f54be98c183c4ec76e43c06d47c876e4ab",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -56,11 +56,20 @@
       }
     },
     {
+      "identity" : "mlx-swift-lm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ml-explore/mlx-swift-lm",
+      "state" : {
+        "revision" : "bd4b7434e6bdb588c7ef55706ff8904cb7fd4c57",
+        "version" : "3.31.4"
+      }
+    },
+    {
       "identity" : "speech-swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/soniqo/speech-swift.git",
       "state" : {
-        "revision" : "e403d0bdd5e134ddbca076ca9e75fd28761e69b1"
+        "revision" : "231f8eb9f0971fee335fef49f42d2975e4fbf8bc"
       }
     },
     {
@@ -289,12 +298,21 @@
       }
     },
     {
+      "identity" : "swift-syntax",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-syntax.git",
+      "state" : {
+        "revision" : "79e4b74a295b6eb74a8b585e3a39d29e70c1dbd1",
+        "version" : "603.0.2"
+      }
+    },
+    {
       "identity" : "swift-system",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-system.git",
       "state" : {
-        "revision" : "b5544ba79a70a0cb3563e75bf26dc198d6b40ed3",
-        "version" : "1.7.4"
+        "revision" : "869129b7bf4ecc57b97d0193ad29690ca2134750",
+        "version" : "1.8.1"
       }
     },
     {

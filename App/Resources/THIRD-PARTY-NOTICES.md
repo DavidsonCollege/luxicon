@@ -13,6 +13,7 @@ Downloaded from Hugging Face on first use, run entirely on-device:
 - **Pyannote segmentation 3.0** — MIT — © pyannote (Hervé Bredin) (pyannote/segmentation-3.0). Converted to MLX by the speech-swift project. — <https://huggingface.co/aufklarer/Pyannote-Segmentation-MLX>
 - **WeSpeaker ResNet34 speaker embeddings** — CC-BY-4.0 — © WeSpeaker developers / pyannote (pyannote/wespeaker-voxceleb-resnet34-LM). Converted to MLX by the speech-swift project. — <https://huggingface.co/aufklarer/WeSpeaker-ResNet34-LM-MLX>
 - **NVIDIA Parakeet EOU 120M (streaming, live captions)** — NVIDIA Open Model License — © NVIDIA Corporation (nvidia/parakeet_realtime_eou_120m-v1). Converted to CoreML by the speech-swift project. License: https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/ — <https://huggingface.co/aufklarer/Parakeet-EOU-120M-CoreML-INT8>
+- **Cohere Transcribe 03-2026 (Mac only)** — Apache-2.0 — © Cohere (CohereLabs/cohere-transcribe-03-2026). MLX conversion (aufklarer/Cohere-Transcribe-2B-MLX-5bit) by the speech-swift project. — <https://huggingface.co/CohereLabs/cohere-transcribe-03-2026>
 
 ## Swift packages
 
@@ -151,7 +152,13 @@ This product contains code from swift-foundation.
 - Copyright (c) 2023 ml-explore
 - <https://github.com/ml-explore/mlx-swift>
 
-### speech-swift e403d0bdd5e1
+### mlx-swift-lm 3.31.4
+
+- License: MIT
+- Copyright (c) 2024 ml-explore
+- <https://github.com/ml-explore/mlx-swift-lm>
+
+### speech-swift 231f8eb9f097
 
 - License: Apache-2.0
 - Copyright 2025 Ivan Digital
@@ -1054,7 +1061,12 @@ This product uses swift-async-algorithms.
 ---
 ```
 
-### swift-system 1.7.4
+### swift-syntax 603.0.2
+
+- License: Apache-2.0
+- <https://github.com/swiftlang/swift-syntax>
+
+### swift-system 1.8.1
 
 - License: Apache-2.0
 - <https://github.com/apple/swift-system>
@@ -1116,6 +1128,58 @@ This product contains code from swift-nio-extras.
 - License: MIT
 - Copyright (c) 2020 YaoYuan <ibireme@gmail.com>
 - <https://github.com/ibireme/yyjson>
+
+## Vendored source
+
+### speech-swift (Apache-2.0)
+
+`Sources/LuxiconKit/ClassicDiarization/` contains source files copied from
+speech-swift at commit e403d0bdd5e1 (the classic pyannote diarization
+pipeline) and modified by Luxicon: types renamed with a `Classic` prefix and
+unused code paths removed. Each file's header names its upstream source and
+the changes made.
+
+- License: Apache-2.0
+- Copyright 2025 Ivan Digital
+- <https://github.com/soniqo/speech-swift>
+
+## Code adapted within dependencies
+
+### mlx-audio-swift (MIT, via speech-swift CohereTranscribeASR, Mac only)
+
+speech-swift's `CohereTranscribeASR` module (`CohereTranscribe.swift`,
+`CohereTranscribeDecoder.swift`, `CohereTranscribeEncoder.swift`,
+`WeightLoading.swift`), linked into the Mac app and command-line tools only,
+contains portions adapted from mlx-audio-swift.
+
+- License: MIT
+- Copyright (c) 2025 Blaizzy and contributors (per the adapted files' headers)
+- Copyright (c) 2025 Prince Canuma (per the upstream LICENSE)
+- <https://github.com/Blaizzy/mlx-audio-swift>
+
+```
+MIT License
+
+Copyright (c) 2025 Prince Canuma
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ## License texts
 

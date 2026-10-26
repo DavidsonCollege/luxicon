@@ -34,13 +34,14 @@ and, on iOS 26+, Apple's system speech model:
   constrained clustering, capped to 2 speakers for 1-on-1s
 - **Transcription** — Apple's on-device system speech model (iOS 26+,
   default), or NVIDIA Parakeet TDT (CoreML) — the built-in engine and the
-  pre-iOS-26 default; switchable in Settings
+  pre-iOS-26 default; switchable in Settings. Mac: optional Cohere
+  Transcribe (1.6 GB download when first used)
 - **Speaker ID** — WeSpeaker enrollment matching (cosine similarity)
 
 Models download on first use and are cached on-device: the diarization
 models (and, when the Parakeet engine is used, transcription) from Hugging
-Face — up to ~700 MB — plus a small live-caption model; Apple's system
-speech model is downloaded and managed by the OS itself.
+Face — up to ~700 MB (Mac: plus 1.6 GB if you choose Cohere Transcribe) —
+plus a small live-caption model; Apple's system speech model is downloaded and managed by the OS itself.
 Summaries use the Apple Intelligence system model — OS-managed, no
 download — and require an iPhone 15 Pro or later on iOS 26 or later; on
 other devices, export the transcript and summarize it with any AI
@@ -84,6 +85,9 @@ the same `~/Luxicon` library the phone pushes into and the MCP server reads.
 - **Privacy:** same posture as the phone app. Audio and transcripts stay on
   the Mac; the only network traffic is the model downloads and the opt-in
   features described below.
+- **Transcription engine:** Settings → Transcription. Optional: Cohere
+  Transcribe (Mac only) downloads a 1.6 GB model from Hugging Face when you
+  choose it.
 
 Build it yourself with `scripts/build-mac-app.sh` (see
 [docs/releasing.md](docs/releasing.md)).
@@ -197,7 +201,8 @@ asks first.
   restored phone keeps your library.
 - Out of the box, the only network traffic is the model downloads — the
   transcription models from Hugging Face, and on iOS 26 the system speech
-  model from Apple (no user data attached).
+  model from Apple (no user data attached). Optional: Cohere Transcribe (Mac
+  only) downloads a 1.6 GB model from Hugging Face when you choose it.
 - On iOS 26 and later, transcription can use Apple's built-in speech model — a
   system component that Apple's OS downloads and runs on-device, the same way
   keyboard dictation works; audio still never leaves the phone.

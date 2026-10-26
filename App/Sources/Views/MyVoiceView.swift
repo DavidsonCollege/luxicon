@@ -154,12 +154,20 @@ struct MyVoiceView: View {
                         Text("Automatic (recommended)").tag(ASREngine?.none)
                         Text("Apple").tag(ASREngine?.some(.appleSpeech))
                         Text("Luxicon").tag(ASREngine?.some(.parakeet))
+                        #if os(macOS)
+                        Text("Cohere Transcribe — best quality (Mac only)").tag(ASREngine?.some(.cohere))
+                        #endif
                     }
                     .onChange(of: store.asrEngineChoice) { store.save() }
                 } header: {
                     Text("Transcription")
                 } footer: {
                     Text("Automatic uses Apple's on-device speech model on this \(DeviceNoun.current). If the Apple engine can't start, transcription falls back to Luxicon's built-in engine. Everything stays on the device either way.")
+                    #if os(macOS)
+                    if store.asrEngineChoice == .cohere {
+                        Text("Downloads a 1.6 GB model the first time it's used and needs about 4 GB of memory while transcribing.")
+                    }
+                    #endif
                 }
             }
 

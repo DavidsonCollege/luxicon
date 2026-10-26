@@ -5,9 +5,9 @@ import LuxiconKit
 
 /// Owns Sparkle. Asks first: there's no `SUEnableAutomaticChecks` in
 /// Info.plist, so Sparkle asks permission before its first scheduled check.
-/// While the app is busy (recording window open, recording, or a session
-/// processing) a scheduled update alert and the post-install relaunch wait
-/// until it's idle; Check for Updates… is never held.
+/// While the app is busy (recording window open, recording, a session
+/// processing, or a summary being written) a scheduled update alert and the
+/// post-install relaunch wait until it's idle; Check for Updates… is never held.
 @MainActor @Observable
 final class MacUpdater: NSObject {
     /// Mirrors `SPUUpdater.canCheckForUpdates`, for the menu item.
@@ -64,6 +64,15 @@ extension MacUpdater: SPUUpdaterDelegate {
     /// `-updateFeedURL <url>`: a scratch appcast instead of `SUFeedURL`.
     func feedURLString(for updater: SPUUpdater) -> String? {
         DebugLaunchOptions.value("-updateFeedURL")
+    }
+
+    /// `-noRelaunchAfterUpdate`: never relaunch after an update. In Sparkle
+    /// 2.10.1 a `false` here makes Install and Relaunch stop short of
+    /// quitting, with the update left staged; it installs in place when the
+    /// app quits, without relaunching. For checks whose installed build must
+    /// not be launched (the real feed's build has the real bundle id).
+    func updaterShouldRelaunchApplication(_ updater: SPUUpdater) -> Bool {
+        !DebugLaunchOptions.has("-noRelaunchAfterUpdate")
     }
     #endif
 

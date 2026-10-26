@@ -134,10 +134,11 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
 
     private var ownedIds: Set<UUID> { Set(store.sessions.map(\.id)) }
 
-    /// Busy: the recording window is open, audio is being captured, or a
-    /// session is processing.
+    /// Busy: the recording window is open, audio is being captured, a
+    /// session is processing, or a summary is being written (a relaunch
+    /// mid-summary would throw that work away).
     private func refreshUpdaterBusy() {
         updater.setBusy(navigation.recordingPerson != nil || store.processing.recordingActive
-            || !store.processing.bySession.isEmpty)
+            || !store.processing.bySession.isEmpty || !store.processing.summarizing.isEmpty)
     }
 }

@@ -49,6 +49,10 @@ import LuxiconKit
 /// - `-updateFeedURL <url>`: a scratch appcast instead of `SUFeedURL`.
 /// - `-checkInBackgroundAt <seconds>`: that long after launch, run a
 ///   scheduled-path (background) check, as Sparkle's own schedule would.
+/// - `-noRelaunchAfterUpdate`: Sparkle never relaunches the app after an
+///   update (`updaterShouldRelaunchApplication` returns false). Install and
+///   Relaunch then leaves the update staged and it installs when the app
+///   quits; read the new `CFBundleVersion` from disk instead of launching it.
 /// An `.updatetest` build quits at launch without both `-storePath` and
 /// `-libraryPath` (`refuseUpdateTestWithoutScratchPaths`), so Sparkle's
 /// argument-less relaunch never opens the real store or library.

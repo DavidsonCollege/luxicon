@@ -145,10 +145,13 @@ targets:
           All processing happens on this Mac; audio never leaves it.
         # Sparkle. No SUEnableAutomaticChecks, so Sparkle asks before its
         # first scheduled check; until the person agrees, only Check for
-        # Updates… contacts the feed.
+        # Updates… contacts the feed. SUAllowsAutomaticUpdates false: Sparkle
+        # never offers "Automatically download and install updates", so an
+        # update is always shown and only downloaded if the person accepts it.
         SUFeedURL: https://davidsoncollege.github.io/luxicon/appcast.xml
         SUPublicEDKey: ok0XZJY3rNX2WfVIHLoVHSysH4hGl4Iq+vBFUPiRQ54=
         SUEnableSystemProfiling: false
+        SUAllowsAutomaticUpdates: false
     settings:
       base:
         PRODUCT_NAME: Luxicon

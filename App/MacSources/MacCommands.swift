@@ -8,9 +8,14 @@ struct MacCommands: Commands {
     let store: Store
     let library: LibraryIndex
     let navigation: MacNavigation
+    let updater: MacUpdater
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") { updater.checkForUpdates() }
+                .disabled(!updater.canCheckForUpdates)
+        }
         CommandGroup(replacing: .newItem) {
             Button("New Recording…") {
                 navigation.beginNewRecording(store: store)

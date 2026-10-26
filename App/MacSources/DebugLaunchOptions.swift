@@ -43,6 +43,13 @@ import LuxiconKit
 /// - `-printWindowID`: once laid out, print `WINDOW_ID <n>` (the route's
 ///   window; for `onboarding`, the main window under the sheet) to stdout.
 ///
+/// Updater (Sparkle is off in DEBUG unless `-enableUpdater`; run it only in
+/// a build whose bundle id is `edu.davidson.luxicon.mac.updatetest`):
+/// - `-enableUpdater`: start Sparkle.
+/// - `-updateFeedURL <url>`: a scratch appcast instead of `SUFeedURL`.
+/// - `-checkInBackgroundAt <seconds>`: that long after launch, run a
+///   scheduled-path (background) check, as Sparkle's own schedule would.
+///
 /// Recording hooks (`-recordWith`, `-noMicrophone`, `-simulate…`,
 /// `-answerPromptWith`, and the picker/mute hooks `-simulateMuteAt`,
 /// `-selectInputNamed`, …) are documented on `DebugRecording`; `-openSettings`
@@ -61,6 +68,7 @@ enum DebugLaunchOptions {
         "-simulateMuteAt": 1, "-simulateUnmuteAt": 1, "-simulateMuteSource": 1, "-simulateStartMuted": 1,
         "-simulateManualOffAt": 1, "-simulateManualResumeAt": 1, "-selectInputNamed": 2,
         "-simulateInputGoneAt": 1, "-simulateUnmuteButtonAt": 1,
+        "-updateFeedURL": 1, "-checkInBackgroundAt": 1,
     ]
 
     /// Flag → its values (empty for a valueless flag).

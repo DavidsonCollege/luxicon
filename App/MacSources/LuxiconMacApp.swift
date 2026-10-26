@@ -21,7 +21,7 @@ struct LuxiconMacApp: App {
         .defaultLaunchBehavior(.presented)
         .commands {
             MacCommands(store: appDelegate.store, library: appDelegate.library,
-                        navigation: appDelegate.navigation)
+                        navigation: appDelegate.navigation, updater: appDelegate.updater)
         }
 
         // One recording at a time, in its own fixed-size window. Never
@@ -53,6 +53,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     let store = Store()
     let library = LibraryIndex()
     let navigation = MacNavigation()
+    let updater = MacUpdater()
 
     #if DEBUG
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -61,6 +62,10 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Update alerts and the post-update relaunch wait while busy.
+        store.processing.onBusyChange = { [weak self] in self?.refreshUpdaterBusy() }
+        navigation.onRecordingPersonChange = { [weak self] in self?.refreshUpdaterBusy() }
+        refreshUpdaterBusy()
         // Writes store.json on first launch, so the location exists.
         store.save()
         // Finished sessions whose ~/Luxicon file is missing or failed to write.
@@ -123,4 +128,11 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var ownedIds: Set<UUID> { Set(store.sessions.map(\.id)) }
+
+    /// Busy: the recording window is open, audio is being captured, or a
+    /// session is processing.
+    private func refreshUpdaterBusy() {
+        updater.setBusy(navigation.recordingPerson != nil || store.processing.recordingActive
+            || !store.processing.bySession.isEmpty)
+    }
 }

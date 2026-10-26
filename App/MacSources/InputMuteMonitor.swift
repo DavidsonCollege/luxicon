@@ -65,7 +65,11 @@ final class InputMuteMonitor {
         isRunning = true
         let immediate = onSystemMuteImmediate
         do {
-            try AVAudioApplication.shared.setInputMuteStateChangeHandler { [weak self] shouldMute in
+            // @Sendable: written inside this @MainActor class, the closure
+            // would otherwise inherit main-actor isolation, and Swift 6's
+            // runtime check traps when the system calls it from its
+            // AudioSession queue (a real AirPods / headset mute request).
+            try AVAudioApplication.shared.setInputMuteStateChangeHandler { @Sendable [weak self] shouldMute in
                 // Mute the samples now, as the handler contract requires.
                 immediate?(shouldMute)
                 // The state and UI follow on main. The handler can arrive
@@ -165,10 +169,18 @@ final class InputMuteMonitor {
     func debugSimulate(_ source: Source, muted: Bool) {
         switch source {
         case .system:
-            do {
-                try AVAudioApplication.shared.setInputMuted(muted)
-            } catch {
-                log("setInputMuted(\(muted)) failed: \(error.localizedDescription)")
+            // Off main, like a real stem press (the handler then runs off
+            // main too, which is the case that must not trap).
+            DispatchQueue.global().async {
+                do {
+                    try AVAudioApplication.shared.setInputMuted(muted)
+                } catch {
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated {
+                            self.log("setInputMuted(\(muted)) failed: \(error.localizedDescription)")
+                        }
+                    }
+                }
             }
         case .device:
             debugDeviceMuted = muted

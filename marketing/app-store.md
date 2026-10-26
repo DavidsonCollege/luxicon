@@ -139,6 +139,26 @@ record.
 
 ## TestFlight — What to Test (per-build notes, 4000 chars max)
 
+### Build 18
+
+New since build 17 — Luxicon for Mac, and a way to bring your voice to it:
+
+(1) Send My Voice to Mac. In My Voice → Mac sync, the new Send My Voice to
+Mac button copies your voice fingerprint (256 numbers, no audio) and your
+name to the paired Mac. It only sends when you tap it. To test: with Mac
+sync paired, tap it — you should see a confirmation, and Luxicon for Mac
+should offer to use it to recognize you. With sync not set up, it should
+say so instead of failing silently.
+(2) Under the hood, much of the app's code is now shared with the Mac
+version. Nothing on the iPhone should look or behave differently — please
+do a normal pass: record a conversation, check the transcript, speakers,
+and summary, and confirm Mac sync still delivers it.
+(3) Privacy wording in My Voice and the privacy policy now describes the
+voice send accurately.
+
+Luxicon for Mac (in-person meetings on your laptop's mic, sharing the same
+~/Luxicon library) is a separate download from GitHub Releases.
+
 ### Build 17
 
 Fixes a data-loss bug: if iOS started Luxicon in the background while the

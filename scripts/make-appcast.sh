@@ -65,9 +65,12 @@ notes_html="$PAGES_DIR/release-notes/$base.html"
   cat "$work/$base.html"
   echo '</body>'; } > "$notes_html"
 
+# --maximum-versions 0 keeps every item; Sparkle's default (3) would trim the
+# oldest from the fourth release on.
 gen_args=(--download-url-prefix "$DOWNLOAD_URL_PREFIX"
           --link "https://github.com/DavidsonCollege/luxicon/releases"
-          --embed-release-notes)
+          --embed-release-notes
+          --maximum-versions 0)
 if [ -n "${ED_KEY_FILE:-}" ]; then
   [ -f "$ED_KEY_FILE" ] || { echo "error: ED_KEY_FILE '$ED_KEY_FILE' is not a file" >&2; exit 1; }
   gen_args+=(--ed-key-file "$ED_KEY_FILE")
@@ -92,6 +95,16 @@ fi
 if [ "$new_items" -lt 1 ] || [ "$new_items" -lt "$old_items" ]; then
   echo "Refusing to publish: generated appcast has $new_items item(s); the existing one has $old_items." >&2
   exit 1
+fi
+# A count can stay equal while an item is swapped out, so every sparkle:version
+# in the published feed must still be in the new one.
+versions() { grep -oE '<sparkle:version>[^<]*</sparkle:version>' "$1" | sed -E 's#</?sparkle:version>##g' | sort -u || true; }
+if [ -f "$PAGES_DIR/appcast.xml" ]; then
+  missing="$(comm -23 <(versions "$PAGES_DIR/appcast.xml") <(versions "$out"))"
+  if [ -n "$missing" ]; then
+    echo "Refusing to publish: generated appcast dropped sparkle:version(s): $(tr '\n' ' ' <<<"$missing")" >&2
+    exit 1
+  fi
 fi
 
 # Guard 2: every enclosure points at this release or an earlier mac-v* release.

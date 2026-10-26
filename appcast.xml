@@ -1,9 +1,30 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
     <channel>
         <title>Luxicon for Mac</title>
         <link>https://github.com/DavidsonCollege/luxicon/releases</link>
         <description>Luxicon for Mac updates</description>
         <language>en</language>
+        <item>
+            <title>1.0</title>
+            <pubDate>Mon, 26 Oct 2026 16:55:23 +0000</pubDate>
+            <link>https://github.com/DavidsonCollege/luxicon/releases</link>
+            <sparkle:version>19</sparkle:version>
+            <sparkle:shortVersionString>1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<pre>
+Luxicon for Mac 1.0 (19)
+
+- Cohere Transcribe (optional): a new "best quality" transcription engine in Settings → Transcription. It downloads a 1.6 GB model the first time you use it and needs about 4 GB of memory while transcribing.
+- Fixed: a crash when you muted your microphone with AirPods or a headset while recording.
+- Automatic updates: Luxicon now checks GitHub for new versions after asking you first, and shows what's new before installing. Nothing about you or your meetings is sent. Luxicon → Check for Updates… works any time.
+
+If you have build 18, download this version by hand once. Future updates will arrive in the app.
+
+</pre>
+]]></description>
+            <enclosure url="https://github.com/DavidsonCollege/luxicon/releases/download/mac-v1.0-19/Luxicon-1.0-19.dmg" length="14638124" type="application/octet-stream" sparkle:edSignature="sHvtTwPUKAMdTly236EUaTVDLtAlVjIP2NQXFbWyJIsPVikkFm0P2VQN/KlwVULd1fNAkvUPMRrGHU0J8oG1Cw=="/>
+        </item>
     </channel>
 </rss>

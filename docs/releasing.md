@@ -15,7 +15,7 @@ There are three release surfaces:
 | Artifact | Flow | Auth it uses |
 |---|---|---|
 | iOS app → TestFlight / App Store | `xcodebuild archive` + `-exportArchive` with `destination: upload` | Xcode's logged-in Apple account session |
-| Mac listener installer → GitHub Releases | push a `listener-v*` tag (CI), or `scripts/build-installer.sh` locally | Developer ID certs + notary profile (local) / repo secrets (CI) |
+| Mac listener installer → GitHub Releases | push a `listener-v*` tag (CI), or `scripts/build-installer.sh` locally | Developer ID certs + notary profile (local) / `release-listener` environment secrets (CI) |
 | Mac app (DMG) → GitHub Releases + Sparkle appcast | push a `mac-v*` tag (CI, approved on the `release` environment); `scripts/build-mac-app.sh` for local unpublished builds | repo secrets + `release` environment secret (CI) / Developer ID Application identity + `luxicon` notary profile (local) |
 
 ---
@@ -28,7 +28,7 @@ There are three release surfaces:
 | "Developer ID Application" identity | login keychain | signs the listener binary and the Mac app + DMG | On W230033 the key ACL already trusts `codesign` (signs non-interactively). On a new Mac run the one-time `security set-key-partition-list` step (Flow 3) first. |
 | "Developer ID Installer" identity | login keychain | signs the installer pkg | Only the Apple **Account Holder** can mint these; JD is not the Account Holder. `.p12` backups of both live in `~/Downloads/Davidson Apple Developer ID {Application,Installer}.p12` (passwords: ask JD — never write them down here). |
 | Notarization credentials | keychain profile named **`luxicon`** (`xcrun notarytool … --keychain-profile luxicon`) | notarizing the installer pkg and the Mac app DMG | Backed by an app-specific password on jdmills@davidson.edu; validated against Apple 2026-07-09. Rotate at appleid.apple.com → update the profile AND the repo secret. |
-| GitHub Actions secrets on `DavidsonCollege/luxicon` | repo → Settings → Secrets | CI listener releases, CI Mac app releases | `AC_APPLE_ID`, `AC_TEAM_ID`, `AC_APP_PASSWORD` (notarization); `DEVELOPER_ID_P12`(+`_PASSWORD`) and `INSTALLER_ID_P12`(+`_PASSWORD`) (signing). Write-only; set with `gh secret set`. These are **repo-level**, not scoped to an environment: the Mac app workflow reuses `DEVELOPER_ID_P12`(+`_PASSWORD`) and the `AC_*` three, shared with the listener workflow. What keeps the Mac release job from using them before JD approves is the `release` environment's reviewer gate (the job doesn't start until he does), not where they're stored. |
+| GitHub Actions secrets on `DavidsonCollege/luxicon` | repo → Settings → Environments | CI listener releases, CI Mac app releases | `AC_APPLE_ID`, `AC_TEAM_ID`, `AC_APP_PASSWORD` (notarization); `DEVELOPER_ID_P12`(+`_PASSWORD`) and `INSTALLER_ID_P12`(+`_PASSWORD`) (signing). Write-only; set with `gh secret set --env`. These are **environment secrets**, not repo-level, so a workflow pushed to some other branch can't read them. The listener's seven live on `release-listener` (deployments only from `listener-v*` tags, no reviewer). The Mac app's five (`DEVELOPER_ID_P12`(+`_PASSWORD`) and the `AC_*` three) live on `release`, so the shared five are set on both. |
 | Sparkle EdDSA signing key (Mac app updates) | private key: login keychain, account **`edu.davidson.luxicon.mac`** (never the default account, which may hold another app's key); CI copy: environment secret **`SPARKLE_ED_PRIVATE_KEY`** on the `release` environment (not a repo secret) | signing the appcast (`scripts/make-appcast.sh`) | Public half is `SUPublicEDKey` in `App/project.yml` (public by design). Never write the private key anywhere in the repo or a log. |
 | `release` environment on `DavidsonCollege/luxicon` | repo → Settings → Environments | gates the Mac app release job; holds `SPARKLE_ED_PRIVATE_KEY` (the only environment-scoped secret) | Required reviewer: JD; admins can't bypass; deployments only from `mac-v*` tags and `main`. The job waits for his approval click. Setup: Flow 3, "One-time setup". |
 
@@ -132,7 +132,8 @@ git tag listener-v1.0.1 && git push origin listener-v1.0.1
 
 `.github/workflows/release-listener.yml` builds on `macos-26` (selects the
 newest installed Xcode — mlx-swift needs Swift tools 6.3+), signs with both
-identities from the repo secrets, notarizes, staples, and publishes the pkg
+identities from the `release-listener` environment's secrets (deployments
+only from `listener-v*` tags; no reviewer, so it starts right away), notarizes, staples, and publishes the pkg
 to a GitHub Release. Watch it: `gh run watch $(gh run list --workflow
 release-listener --limit 1 --json databaseId --jq '.[0].databaseId')`.
 
@@ -201,10 +202,8 @@ A lightweight tag works but leaves the notes as a one-line default.
 The job runs in the **`release`** environment, which requires JD's approval
 (Actions → the run → Review deployments → Approve). The job doesn't start
 until he clicks, so nothing is built and no step can read any secret before
-then: not the environment's `SPARKLE_ED_PRIVATE_KEY`, and not the repo-level
-signing and notarization secrets either (those live on the repo, shared with
-the listener workflow; the gate is the environment's reviewer rule, not
-where they're stored).
+then: not the environment's `SPARKLE_ED_PRIVATE_KEY`, and not the signing and
+notarization secrets either, which live on the environment too.
 The environment must exist with required reviewers before the first tag or
 dispatch: if it doesn't, GitHub creates it on first use with no protection
 and the job runs unapproved. See "One-time setup" below.
